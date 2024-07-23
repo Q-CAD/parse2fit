@@ -1,0 +1,47 @@
+# Example Layout
+#
+output_format: 'jax-reaxff' # consistent tag across all .yaml
+generation_parameters:
+  number_to_generate: 5
+  path_to_directory: 'testing'
+default_weights: # Default is 50/50 0 or 1
+  energy: 
+    type: 'magnitude'
+    min: 1
+    max: 20
+    kT: 35
+  charges: 
+    type: 'binary'
+    min: 0
+    max: 1
+    split: 0.5
+  forces:
+    type: 'binary'
+    min: 0
+    max: 5
+    split: 0.8
+  distances:
+    type: 'uniform'
+    min: 0
+    max: 5
+    spread: 15
+input_paths:
+  /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837:
+    energy:
+      subtract:
+        - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837/volume_1 
+  /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837/volume_1:
+    structure:
+       optimize: True
+    energy:
+      subtract:
+        - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152
+        - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Se/Se/mp-14
+      get_divisors: True
+    charges: True
+    forces: True
+    distances: True
+  /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/stress_strain/Bi-Se/Bi2Se3/mp-541837/C11_C33_C13_II:
+    energy:
+      subtract:
+        - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/stress_strain/Bi-Se/Bi2Se3/mp-541837/C11_C33_C13_II/strain_0.0

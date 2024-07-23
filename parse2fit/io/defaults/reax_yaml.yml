@@ -1,0 +1,28 @@
+# Expected layout
+#
+output_format: 'jax-reaxff' # consistent tag across all .yaml
+default_weights: # Should set these
+  energy: dict
+  charge: dict
+generation_parameters:
+  number_to_generate: int
+  path_to_directory: str
+input_paths:
+  path1:
+    label: str
+    structure:
+       format: 'ase_atoms' or 'pymatgen_structure'
+       periodic: True or False
+       optimize: True or False
+    energy:
+       add: [list of paths]
+       subtract: [list of paths]
+       get_divisors: True or False
+       weighting: int
+    charges: True or False or dict
+       weighting: list or dict
+    forces: T/F or dct
+    distances: T/F or dct
+    angles: T/F
+    dihedrals: T/F
+    lattice_vectors:
