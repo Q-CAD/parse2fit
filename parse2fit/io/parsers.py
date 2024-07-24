@@ -6,6 +6,7 @@ from pymatgen.io.vasp.outputs import Vasprun
 from ase.geometry.analysis import Analysis
 from ase.io import read
 from pymatgen.core.structure import Structure
+from xml.etree.ElementTree import ParseError
 
 # Base class for parsers
 class Parser(ABC):

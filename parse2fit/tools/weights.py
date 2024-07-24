@@ -24,7 +24,16 @@ class WeightedSampler:
     def set_max_min(self, min_val, max_val, values):
         m = (max_val - min_val)/(np.max(values) - np.min(values))
         b = min_val - m*(np.min(values))
-        return [float(int(m*val+b)) for val in values]
+        ys = [int(m*val+b) for val in values]
+        correct_vals = []
+        for y in ys:
+            if y == max(ys):
+                correct_vals.append(float(max_val))
+            elif y == min(ys):
+                correct_vals.append(float(min_val))
+            else:
+                correct_vals.append(float(y))
+        return correct_vals
 
     def uniform_weighting(self):
         min_val = self.dist_params.get('min')

@@ -5,6 +5,7 @@ from parse2fit.tools.weights import WeightedSampler
 import yaml
 from pathlib import Path
 import os
+import sys
 
 class YamlManager(ABC):
     def __init__(self, config_path):
@@ -164,9 +165,18 @@ class ReaxRW():
                         continue
         return objects_dct
 
+    def _check_paths(self, paths_list):
+        for path in paths_list:
+            if os.path.exists(path) is False:
+                print(f'{path} does not exist; check input .yml!')
+                sys.exit(1)
+        return 
+
     def _construct_objects_dct(self):
         sorted_input_paths = sorted(list(self.input_paths.keys()), key=len, reverse=True)
         sorted_energy_paths = sorted(list(self._get_energy_paths()), key=len, reverse=True)
+        self._check_paths(sorted_input_paths)
+        self._check_paths(sorted_energy_paths)
         objects_dct = self._build_objects_dct({}, sorted_input_paths) # Construct top level paths first
         objects_dct = self._build_objects_dct(objects_dct, sorted_energy_paths, walk_roots=False) # Then attempt to construct energy paths
         return objects_dct
@@ -207,7 +217,6 @@ class ReaxRW():
         for energy_path in list(energy_dct.keys()):
             relative_energy = energy_dct[energy_path]['relative_energy']
             weights = objects_dictionary[energy_path]['energy']['weighting']
-            #print(energy_path, weights)
             if weights == self.default_weights['energy']: # Top level relative energy weighting
                 super_paths.append(energy_path)
                 super_values.append(energy_dct[energy_path]['relative_energy'])
@@ -232,7 +241,7 @@ class ReaxRW():
             write_string += reax_obj.structure_to_string(**structure_args)
         return write_string
 
-    def get_trainsetin_string(self, objects_dictionary):
+    def get_trainsetin_string(self, objects_dictionary, self_energy=False):
         write_string = ''
         ere = ReaxEntry(label='empty') # For writing headers and footers
         
@@ -240,8 +249,9 @@ class ReaxRW():
         for write_option in ['charges', 'forces', 'lattice_vectors']:
             write_string += ere.trainsetin_section_header(write_option)
             for path_i, object_path in enumerate(list(objects_dictionary.keys())):
-                if objects_dictionary[object_path][write_option] is not None:
-                    weights = objects_dictionary[object_path][write_option]['weighting']
+                option_val = objects_dictionary[object_path][write_option]
+                if isinstance(option_val, dict):
+                    weights = option_val['weighting']
                     reax_obj = objects_dictionary[object_path]['reax_entry']
                     write_string += reax_obj.get_property_string(write_option, weights=weights)
             write_string += ere.trainsetin_section_footer(write_option) 
@@ -250,7 +260,8 @@ class ReaxRW():
         write_string += ere.trainsetin_section_header('distances')
         for write_option in ['distances', 'angles', 'dihedrals']:
             for path_i, object_path in enumerate(list(objects_dictionary.keys())):
-                if objects_dictionary[object_path][write_option] is not None:
+                option_val = objects_dictionary[object_path][write_option]
+                if isinstance(option_val, dict):
                     weights = objects_dictionary[object_path][write_option]['weighting']
                     reax_obj = objects_dictionary[object_path]['reax_entry']
                     write_string += reax_obj.get_property_string('distances', weights=weights)
@@ -262,10 +273,13 @@ class ReaxRW():
         for path_j, object_path in enumerate(list(re_dictionary.keys())):
             reax_obj = re_dictionary[object_path]['reax_entry']
             weight = re_dictionary[object_path]['weight']
-            write_string += reax_obj.relative_energy_to_string(weight=weight, 
-                            add=re_dictionary[object_path]['add'], 
-                            subtract=re_dictionary[object_path]['subtract'],
-                            get_divisors=re_dictionary[object_path]['get_divisors'])
+            add = re_dictionary[object_path]['add']
+            subtract = re_dictionary[object_path]['subtract']
+            if self_energy == False and (reax_obj in add or reax_obj in subtract):
+                continue # Don't write self energy
+            else:
+                write_string += reax_obj.relative_energy_to_string(weight=weight, 
+                            add=add, subtract=subtract, get_divisors=re_dictionary[object_path]['get_divisors'])
         write_string += ere.trainsetin_section_footer('energy')
         return write_string
 
@@ -274,7 +288,7 @@ class ReaxRW():
             text_file.write(write_string)
         return 
 
-    def write_trainsetins(self, attempt_multiplier=5):
+    def write_trainsetins(self, attempt_multiplier=5, self_energy=False):
         objects_dictionary = self._construct_objects_dct()
         geo_string = self.get_geo_string(objects_dictionary)
 
@@ -288,9 +302,10 @@ class ReaxRW():
         while unique < number_to_generate: # Get unique trainset.in files
             if attempts > attempt_multiplier * number_to_generate:
                 break
-            trainsetin_string = self.get_trainsetin_string(objects_dictionary)
+            trainsetin_string = self.get_trainsetin_string(objects_dictionary, self_energy)
             if trainsetin_string not in trainsetin_strings:
-                write_path = os.path.join(path_to_directory, 'run' + str(unique))
+                subdirectory = self.config_dct.get('output_format') + '_run_' + str(unique)
+                write_path = os.path.join(path_to_directory, subdirectory)
                 os.makedirs(write_path, exist_ok=True)
                 self.string_to_file(os.path.join(write_path, 'geo'), geo_string)
                 self.string_to_file(os.path.join(write_path, 'trainset.in'), trainsetin_string)
