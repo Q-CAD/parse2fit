@@ -7,6 +7,7 @@ from ase.geometry.analysis import Analysis
 from ase.io import read
 from pymatgen.core.structure import Structure
 from xml.etree.ElementTree import ParseError
+import numpy as np
 
 # Base class for parsers
 class Parser(ABC):
@@ -129,9 +130,12 @@ class VaspParser(Parser):
         lattice_vectors = []
         contcar_path = os.path.join(self.directory, 'CONTCAR')
         atoms = read(contcar_path)
-        lattice_vectors.append(LatticeVector(vector=atoms.cell[0], parameter='a', unit='Angstrom'))
-        lattice_vectors.append(LatticeVector(vector=atoms.cell[1], parameter='b', unit='Angstrom'))
-        lattice_vectors.append(LatticeVector(vector=atoms.cell[2], parameter='c', unit='Angstrom'))
+        lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[0])), vector=list(atoms.cell[0]), 
+                                             parameter='a', unit='Angstrom'))
+        lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[1])), vector=list(atoms.cell[1]), 
+                                             parameter='b', unit='Angstrom'))
+        lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[2])), vector=list(atoms.cell[2]), 
+                                             parameter='c', unit='Angstrom'))
         return PropertyCollection(lattice_vectors)
 
     def parse_all(self):

@@ -9,7 +9,7 @@ class StructuretoString:
     def __init__(self, structure, label, **kwargs):
         self.structure = structure
         self.label = label
-        self.options = kwargs 
+        self.options = kwargs
 
     def to_bgf_string(self):
         temp_vasp = 'temp_poscar.vasp'
@@ -38,7 +38,6 @@ class StructuretoString:
         old_string = ''
 
         with open(path) as bgf_file:
-            #bgf_parent = str(Path(bgf_path).parent.absolute())
             for newline in bgf_file:
                 old_string += newline
                 if newline.strip(): # Ignore empty lines
@@ -50,9 +49,9 @@ class StructuretoString:
                         new_string += f'DESCRP {self.label}\n'
                         newline = newline.replace('DESCRP', 'REMARK')
 
-                        # Can add more arguments based on optimization type here
-                        if self.options.get("optimize") is True and self.options["optimize"] is True: # Check to see if it is unperturbed structure
-                            newline += f'RUTYPE CELL OPT     0\n' # Indicate cell optimization
+                        # Refer to https://www.engr.psu.edu/ADRI/Upload/reax_um.pdf for supported RUTYPE keys
+                        if self.options.get('rutype') is not None and isinstance(self.options.get("rutype"), str):
+                            newline += f'RUTYPE {self.options.get("rutype")}\n' # Add the string specified here
 
                     if 'CRYSTX' in newline:
                         start = newline.split(".")[0]

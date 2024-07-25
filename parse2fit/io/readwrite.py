@@ -48,7 +48,7 @@ class ReaxRW():
 
     def _set_default_weights(self, weight_dct):
         dct = {}
-        default = {'spread': 0.5}
+        default = {'split': 0.5}
         default['type'] = 'binary'
         default['min'] = 0
         default['max'] = 1
@@ -106,18 +106,22 @@ class ReaxRW():
                         value['pymatgen_structure'] = True # Default
             elif prop == 'energy': 
                 if value is None or value is True:
-                    value = {'weighting': self.default_weights['energy']}
+                    value = {'weights': self.default_weights['energy']}
                 elif isinstance(value, dict): # Dictionary passed
-                    if value.get('weighting') is None: # No weighting specified
-                        value['weighting'] = self.default_weights['energy']
+                    if value.get('weights') is None: # No weights specified
+                        value['weights'] = self.default_weights['energy']
+                    elif isinstance(value.get('weights'), int):
+                        value['weights'] = float(value['weights']) # Set fixed energy weighting here
             else:
                 if value is None:
                     pass
                 elif value is True:
-                    value = {'weighting': self.default_weights[prop]}
+                    value = {'weights': self.default_weights[prop]}
                 elif isinstance(value, dict):
-                     if value.get('weighting') is None: # No weighting specified
-                        value['weighting'] = self.default_weights[prop]
+                     if value.get('weights') is None: # No weights specified
+                        value['weights'] = self.default_weights[prop]
+                     elif isinstance(value.get('weights'), list):
+                        value['weights'] = [float(val) for val in value['weights']]
             path_dct[prop] = value
         path_dct['top_path'] = top_path
         return path_dct
@@ -183,7 +187,7 @@ class ReaxRW():
 
     def _get_relative_energies(self, objects_dictionary):
         ''' Continue editing this ''' 
-        # Compute weighting across all relative energies
+        # Compute weights across all relative energies
         energy_dct = {} # ReaxObj: {relative_energy: float, add: [], subtract: [], divisors: , weight, sig_figs}
         for object_path in objects_dictionary:
             reax_obj = objects_dictionary[object_path]['reax_entry']
@@ -216,8 +220,8 @@ class ReaxRW():
         super_paths, super_values = [], []
         for energy_path in list(energy_dct.keys()):
             relative_energy = energy_dct[energy_path]['relative_energy']
-            weights = objects_dictionary[energy_path]['energy']['weighting']
-            if weights == self.default_weights['energy']: # Top level relative energy weighting
+            weights = objects_dictionary[energy_path]['energy']['weights']
+            if weights == self.default_weights['energy']: # Top level relative energy weights
                 super_paths.append(energy_path)
                 super_values.append(energy_dct[energy_path]['relative_energy'])
             elif isinstance(weights, float):
@@ -251,9 +255,10 @@ class ReaxRW():
             for path_i, object_path in enumerate(list(objects_dictionary.keys())):
                 option_val = objects_dictionary[object_path][write_option]
                 if isinstance(option_val, dict):
-                    weights = option_val['weighting']
+                    weights = option_val['weights']
                     reax_obj = objects_dictionary[object_path]['reax_entry']
-                    write_string += reax_obj.get_property_string(write_option, weights=weights)
+                    write_string += reax_obj.get_property_string(write_option, weights=weights, 
+                                                                 default_weights=self.default_weights[write_option])
             write_string += ere.trainsetin_section_footer(write_option) 
         
         # Handling Geometry Properties
@@ -262,9 +267,10 @@ class ReaxRW():
             for path_i, object_path in enumerate(list(objects_dictionary.keys())):
                 option_val = objects_dictionary[object_path][write_option]
                 if isinstance(option_val, dict):
-                    weights = objects_dictionary[object_path][write_option]['weighting']
+                    weights = objects_dictionary[object_path][write_option]['weights']
                     reax_obj = objects_dictionary[object_path]['reax_entry']
-                    write_string += reax_obj.get_property_string('distances', weights=weights)
+                    write_string += reax_obj.get_property_string(write_option, weights=weights, 
+                                                                  default_weights=self.default_weights[write_option])
         write_string += ere.trainsetin_section_footer('distances')
 
         # Handling energy
@@ -289,27 +295,30 @@ class ReaxRW():
         return 
 
     def write_trainsetins(self, attempt_multiplier=5, self_energy=False):
+        print('Constructing ReaxFF objects dictionary...')
         objects_dictionary = self._construct_objects_dct()
         geo_string = self.get_geo_string(objects_dictionary)
 
-        number_to_generate = self.generation_parameters['number_to_generate']
-        path_to_directory = self.generation_parameters['path_to_directory']
+        runs_to_generate = self.generation_parameters['runs_to_generate']
+        output_directory = self.generation_parameters['output_directory']
 
         trainsetin_strings = []
         unique = 0
         attempts = 0
-
-        while unique < number_to_generate: # Get unique trainset.in files
-            if attempts > attempt_multiplier * number_to_generate:
+        
+        print('Writing unique trainset.in files...')
+        while unique < runs_to_generate: # Get unique trainset.in files
+            if attempts > attempt_multiplier * runs_to_generate:
                 break
             trainsetin_string = self.get_trainsetin_string(objects_dictionary, self_energy)
             if trainsetin_string not in trainsetin_strings:
                 subdirectory = self.config_dct.get('output_format') + '_run_' + str(unique)
-                write_path = os.path.join(path_to_directory, subdirectory)
+                write_path = os.path.join(output_directory, subdirectory)
                 os.makedirs(write_path, exist_ok=True)
                 self.string_to_file(os.path.join(write_path, 'geo'), geo_string)
                 self.string_to_file(os.path.join(write_path, 'trainset.in'), trainsetin_string)
                 trainsetin_strings.append(trainsetin_string)
                 unique += 1
             attempts += 1
+        print('Finished successfully.')
         return

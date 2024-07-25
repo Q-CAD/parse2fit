@@ -66,8 +66,8 @@ class Geometry(Property):
         return f"Geometry(species={self.species}, indices={self.indices}, {self.geometry_type}={self.value}, unit={self.unit})"
 
 class LatticeVector(Property):
-    def __init__(self, vector=None, unit=None, parameter=None):
-        super().__init__(np.linalg.norm(vector), unit)
+    def __init__(self, value=None, unit=None, vector=None, parameter=None):
+        super().__init__(value, unit)
         self.vector = vector
         self.parameter = parameter
 

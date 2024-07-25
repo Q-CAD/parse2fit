@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from parse2fit.tools.fileconverter import StructuretoString 
 from parse2fit.core.properties import Energy, PropertyCollection
 from parse2fit.tools.weights import WeightedSampler
+from parse2fit.tools.unitconverter import UnitConverter
 from pymatgen.core.structure import Structure
 from ase import Atoms
 import numpy as np
@@ -95,12 +96,15 @@ class ReaxEntry(Entry):
             for angle in self.angles.properties:
                 angle.convert_units('angle', units_dct['angle'])
         if self.dihedrals:
-            for dihedral in dihedrals:
+            for dihedral in self.dihedrals.properties:
                 dihedral.convert_units('angle', units_dct['angle'])
         if self.lattice_vectors:
-            for lattice_vector in lattice_vectors:
+            uc = UnitConverter()
+            for lattice_vector in self.lattice_vectors.properties:
                 lattice_vector.convert_units('length', units_dct['length'])
-    
+                lattice_vector.vector = uc.convert(lattice_vector.vector, lattice_vector.unit, 
+                                                   units_dct['length'], 'length')
+            
     def site_counts(self):
         if self.structure:
             site_counts = {}
@@ -143,19 +147,30 @@ class ReaxEntry(Entry):
         elif property_type in ['lattice_vector', 'lattice_vectors']:
             return "ENDCELL PARAMETERS\n"
 
-    def _get_weights(self, weights, collection):
+    def _get_weights(self, weights, collection, default_weights=None):
         if isinstance(collection, PropertyCollection):
-            if isinstance(weights, list):
+            values = [np.linalg.norm(prop.value) for prop in collection.properties] # To handle forces
+            if isinstance(weights, int) or isinstance(weights, float):
+                weights = [float(weights) for w in range(len(collection.properties))]
+            elif isinstance(weights, list):
                 if len(weights) == len(collection.properties):
                     weights = weights
                 else:
-                    print(f'{len(weights)} != {len(weights)}; setting default all = 1.0')
-                    weights = [1.0 for i in range(len(collection.properties))]
+                    if default_weights is not None:
+                        print(f'{len(weights)} weights != {len(collection.properties)}; setting with default {default_weights}')
+                        weights = WeightedSampler(values, default_weights).sample()
+                    else:
+                        print(f'{len(weights)} weights != {len(collection.properties)} and default_weights = None; setting all = 1.0')
+                        weights = [1.0 for i in range(len(collection.properties))]
             elif isinstance(weights, dict):
-                values = [np.linalg.norm(prop.value) for prop in collection.properties] # To handle forces
                 weights = WeightedSampler(values, weights).sample() # Pass weights dict as arguments
             else:
-                weights = [1.0 for i in range(len(collection.properties))]
+                if default_weights is not None:
+                    print(f'Weights {weights} not appropriate; setting with default {default_weights}')
+                    weights = WeightedSampler(values, default_weights).sample()
+                else:
+                    print(f'Weights {weights} not appropriate and default_weights = None; setting all = 1.0')
+                    weights = [1.0 for i in range(len(collection.properties))]
         return weights 
 
     def energy_to_string(self):
@@ -180,14 +195,14 @@ class ReaxEntry(Entry):
     def relative_energy_to_string(self, weight=1, sig_figs=3, add=[], subtract=[], get_divisors=False):
         relative_energy_str = ''
         reax_objs, signs, divisors, relative_energy = self.get_relative_energy(add, subtract, get_divisors)
-        if relative_energy.value is not None: # No appropriate divisors found
+        if relative_energy.value is not None and weight != 0: # No appropriate divisors found
             relative_energy_str += self._relative_energy_substring(weight, relative_energy, reax_objs, divisors, signs, sig_figs)
         return relative_energy_str
 
     def _relative_energy_substring(self, weight, relative_energy, reax_objs, divisors, signs, sig_figs):
-        relative_energy_str = f'{weight}'
+        relative_energy_str = f' {weight}'
         for i, reax_obj in enumerate(reax_objs):
-            relative_energy_str += f'   {signs[i]}   {reax_obj.label}/{divisors[i]}'
+            relative_energy_str += f'   {signs[i]}   {reax_obj.label} /{divisors[i]}'
         rounded_energy = np.round(relative_energy.value, sig_figs)
         relative_energy_str += f'       {rounded_energy}\n'
         return relative_energy_str
@@ -252,26 +267,28 @@ class ReaxEntry(Entry):
 
         return use_divisors
 
-    def charges_to_string(self, weights=None, sig_figs=3):
+    def charges_to_string(self, weights=None, default_weights=None, sig_figs=3):
         charges_string = ''
         if self.charges is not None:
-            weights = self._get_weights(weights, self.charges)
+            weights = self._get_weights(weights, self.charges, default_weights)
             for charge_ind, charge in enumerate(self.charges.properties):
-                rounded_charge = np.round(charge.value, sig_figs)
-                charges_string += f"{self.label} {weights[charge_ind]} {charge.indice+1} {rounded_charge}\n"
+                if weights[charge_ind] != 0:
+                    rounded_charge = np.round(charge.value, sig_figs)
+                    charges_string += f"{self.label} {weights[charge_ind]} {charge.indice+1} {rounded_charge}\n"
         return charges_string
 
-    def forces_to_string(self, weights=None, sig_figs=3):
+    def forces_to_string(self, weights=None, default_weights=None, sig_figs=3):
         forces_string = ''
         if self.forces is not None:
-            weights = self._get_weights(weights, self.forces)
+            weights = self._get_weights(weights, self.forces, default_weights)
             for force_ind, force in enumerate(self.forces.properties):
-                rounded_forces = np.round(force.value, sig_figs)
-                atom_forces_string = ''.join([str(rounded_force) + ' ' for rounded_force in rounded_forces])
-                forces_string += f"{self.label}  {weights[force_ind]}  {force.indice+1}  {atom_forces_string}\n"
+                if weights[force_ind] != 0:
+                    rounded_forces = np.round(force.value, sig_figs)
+                    atom_forces_string = ''.join([str(rounded_force) + ' ' for rounded_force in rounded_forces])
+                    forces_string += f"{self.label}  {weights[force_ind]}  {force.indice+1}  {atom_forces_string}\n"
         return forces_string
 
-    def geometries_to_string(self, geometry_type, weights=None, sig_figs=3):
+    def geometries_to_string(self, geometry_type, weights=None, default_weights=None, sig_figs=3):
         geometry_string = ''
         
         if geometry_type in ['distance', 'distances']:
@@ -282,20 +299,22 @@ class ReaxEntry(Entry):
             props = self.dihedrals
         
         if props is not None:
-            weights = self._get_weights(weights, props)
+            weights = self._get_weights(weights, props, default_weights)
             for property_ind, prop in enumerate(props.properties):
-                rounded_value = np.round(prop.value, sig_figs)
-                add_one_indices = ''.join([str(indice+1) + '   ' for indice in prop.indices])
-                geometry_string += f"{self.label}  {weights[property_ind]}   {add_one_indices}   {rounded_value}\n"
+                if weights[property_ind] != 0:
+                    rounded_value = np.round(prop.value, sig_figs)
+                    add_one_indices = ''.join([str(indice+1) + '   ' for indice in prop.indices])
+                    geometry_string += f"{self.label}  {weights[property_ind]}   {add_one_indices}   {rounded_value}\n"
         return geometry_string
 
-    def lattice_vectors_to_string(self, weights=None, sig_figs=3):
+    def lattice_vectors_to_string(self, weights=None, default_weights=None, sig_figs=3):
         lattice_vector_string = ''
         if self.lattice_vectors is not None:
-            weights = self._get_weights(weights, self.lattice_vectors)
+            weights = self._get_weights(weights, self.lattice_vectors, default_weights)
             for lattice_vector_ind, lattice_vector in enumerate(self.lattice_vectors.properties):
-                rounded_lattice_vector = np.round(lattice_vector.value, sig_figs)
-                lattice_vector_string += f"{label} {weights[lattice_vector_ind]}    {self.lattice_parameter} {self.rounded_magnitude}\n"
+                if weights[lattice_vector_ind] != 0:
+                    rounded_lattice_vector = np.round(lattice_vector.value, sig_figs)
+                    lattice_vector_string += f"{self.label}  {weights[lattice_vector_ind]}    {lattice_vector.parameter}  {rounded_lattice_vector}\n"
         return lattice_vector_string
 
     def get_property_string(self, property_type, **kwargs):
