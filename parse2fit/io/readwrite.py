@@ -104,16 +104,22 @@ class ReaxRW():
                 elif isinstance(value, dict):
                     if value.get('pymatgen_structure') is None and value.get('ase_structure') is None:
                         value['pymatgen_structure'] = True # Default
+                else:
+                    print(f'{value} not recognized for {prop} in .yml; defaulting to pymatgen_structure=True')
+                    value = {'pymatgen_structure': True}
             elif prop == 'energy': 
                 if value is None or value is True:
-                    value = {'weights': self.default_weights['energy']}
+                    value = {'weights': self.default_weights['energy']} # Default
                 elif isinstance(value, dict): # Dictionary passed
                     if value.get('weights') is None: # No weights specified
                         value['weights'] = self.default_weights['energy']
                     elif isinstance(value.get('weights'), int):
                         value['weights'] = float(value['weights']) # Set fixed energy weighting here
+                else:
+                    print(f'{value} not recognized for {prop} in .yml; defaulting to True')
+                    value = {'weights': self.default_weights['energy']} # Default
             else:
-                if value is None:
+                if value is None or value is False:
                     pass
                 elif value is True:
                     value = {'weights': self.default_weights[prop]}
@@ -122,6 +128,8 @@ class ReaxRW():
                         value['weights'] = self.default_weights[prop]
                      elif isinstance(value.get('weights'), list):
                         value['weights'] = [float(val) for val in value['weights']]
+                else:
+                    print(f'{value} not recognized for {prop} in .yml; defaulting to False')
             path_dct[prop] = value
         path_dct['top_path'] = top_path
         return path_dct
@@ -136,6 +144,7 @@ class ReaxRW():
         parsed_dct = ParserFactory.create_parser(path,
                 pymatgen_structure=self._none_false(path_dct['structure'].get('pymatgen_structure')),
                 ase_atoms=self._none_false(path_dct['structure'].get('ase_atoms')),
+                periodic_geometries=self._none_false(self.generation_parameters.get('periodic_geometries')), 
                 energy=self._none_false(path_dct.get('energy')),
                 charges=self._none_false(path_dct.get('charges')),
                 forces=self._none_false(path_dct.get('forces')),
@@ -309,6 +318,7 @@ class ReaxRW():
         print('Writing unique trainset.in files...')
         while unique < runs_to_generate: # Get unique trainset.in files
             if attempts > attempt_multiplier * runs_to_generate:
+                print(f'Number of unique trainset.in file generation attempts exceeds {attempt_multiplier * runs_to_generate}; breaking loop...')
                 break
             trainsetin_string = self.get_trainsetin_string(objects_dictionary, self_energy)
             if trainsetin_string not in trainsetin_strings:
@@ -320,5 +330,5 @@ class ReaxRW():
                 trainsetin_strings.append(trainsetin_string)
                 unique += 1
             attempts += 1
-        print('Finished successfully.')
+        print(f'Finished successfully, {unique} unique trainset.in files written.')
         return

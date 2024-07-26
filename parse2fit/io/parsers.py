@@ -33,6 +33,10 @@ class Parser(ABC):
 
     def _get_ase_geometries(self, ASE_atoms, geometry_type, unit):
         properties = []
+        # Whether to find periodic neighbors or just neighbors within the cell
+        if "periodic_geometries" in self.options:
+            ASE_atoms.set_pbc(self.options.get('periodic_geometries'))
+        
         analysis = Analysis(ASE_atoms)
 
         if geometry_type == 'distances':
@@ -84,9 +88,9 @@ class VaspParser(Parser):
 
     def parse_structure(self):
         contcar = os.path.join(self.directory, 'CONTCAR')
-        if self.options.get("pymatgen_structure") is True and self.options["pymatgen_structure"] is True:
+        if self.options.get("pymatgen_structure") is True:
             return Structure.from_file(contcar)
-        elif self.options.get("ase_atoms") is True and self.options["ase_atoms"] is True:
+        elif self.options.get("ase_atoms") is True:
             return read(contcar)
 
     def parse_energy(self):
@@ -142,23 +146,23 @@ class VaspParser(Parser):
         data = {'energy': None, 'structure': None, 'charges': None, 'forces': None, 
                 'lattice_vectors': None, 'distances': None, 'angles': None, 'dihedrals': None}
 
-        if self.options.get("pymatgen_structure") is True and self.options["pymatgen_structure"] is True:
+        if self.options.get("pymatgen_structure") is True:
             data['structure'] = self.parse_structure() # Default if both are specified
-        if self.options.get("ase_atoms") is True and self.options["ase_atoms"] is True:
+        if self.options.get("ase_atoms") is True:
             data['structure'] = self.parse_structure()
-        if self.options.get("energy") is True and self.options["energy"] is True:
+        if self.options.get("energy") is True:
             data['energy'] = self.parse_energy()
-        if self.options.get("charges") is True and self.options["charges"] is True:
+        if self.options.get("charges") is True:
             data['charges'] = self.parse_charges()
-        if self.options.get("forces") is True and self.options["forces"] is True:
+        if self.options.get("forces") is True:
             data['forces'] = self.parse_forces()
-        if self.options.get("distances") is True and self.options["distances"] is True:
+        if self.options.get("distances") is True:
             data['distances'] = self.parse_geometries('distances')
-        if self.options.get("angles") is True and self.options["angles"] is True:
+        if self.options.get("angles") is True:
             data['angles'] = self.parse_geometries('angles')
-        if self.options.get("dihedrals") is True and self.options["dihedrals"] is True:
+        if self.options.get("dihedrals") is True:
             data['dihedrals'] = self.parse_geometries('dihedrals')
-        if self.options.get("lattice_vectors") is True and self.options["lattice_vectors"] is True:
+        if self.options.get("lattice_vectors") is True:
             data['lattice_vectors'] = self.parse_lattice_vectors()
 
         return data
