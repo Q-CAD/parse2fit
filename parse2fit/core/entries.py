@@ -228,7 +228,8 @@ class ReaxEntry(Entry):
         for el in list(comp_dct.keys()):
             el_div_lst.append(self._integer_divisors(comp_dct[el]))
         common_divisors = list(set.intersection(*map(set, el_div_lst)))
-        return common_divisors
+        common_divisors_sorted = sorted(common_divisors, reverse=True) # Largest to smallest
+        return common_divisors_sorted
 
     def _sums_to_zero(self, divisor_combo, all_dcts, all_signs):
         final_dct = {}
@@ -257,8 +258,8 @@ class ReaxEntry(Entry):
             all_dcts.append(s_site_counts)
             all_multipliers.append(-1)
             all_divisors.append(scd._composition_divisors(s_site_counts))
-        divisor_combos = list(reversed(list(itertools.product(*all_divisors)))) # Largest divisors first
-
+        divisor_combos = list(itertools.product(*all_divisors))
+        
         use_divisors = None
         for divisor_combo in divisor_combos:
             if self._sums_to_zero(divisor_combo, all_dcts, all_multipliers) is True:
