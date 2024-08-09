@@ -164,6 +164,8 @@ class ReaxEntry(Entry):
                         weights = [1.0 for i in range(len(collection.properties))]
             elif isinstance(weights, dict):
                 weights = WeightedSampler(values, weights).sample() # Pass weights dict as arguments
+            elif isinstance(weights, str): # Primarily for internal regex passing
+                weights = [weights for w in range(len(collection.properties))]
             else:
                 if default_weights is not None:
                     print(f'Weights {weights} not appropriate; setting with default {default_weights}')
@@ -195,7 +197,7 @@ class ReaxEntry(Entry):
     def relative_energy_to_string(self, weight=1, sig_figs=3, add=[], subtract=[], get_divisors=False):
         relative_energy_str = ''
         reax_objs, signs, divisors, relative_energy = self.get_relative_energy(add, subtract, get_divisors)
-        if relative_energy.value is not None and weight != 0: # No appropriate divisors found
+        if relative_energy.value is not None: # No appropriate divisors found
             relative_energy_str += self._relative_energy_substring(weight, relative_energy, reax_objs, divisors, signs, sig_figs)
         return relative_energy_str
 
@@ -273,9 +275,8 @@ class ReaxEntry(Entry):
         if self.charges is not None:
             weights = self._get_weights(weights, self.charges, default_weights)
             for charge_ind, charge in enumerate(self.charges.properties):
-                if weights[charge_ind] != 0:
-                    rounded_charge = np.round(charge.value, sig_figs)
-                    charges_string += f"{self.label} {weights[charge_ind]} {charge.indice+1} {rounded_charge}\n"
+                rounded_charge = np.round(charge.value, sig_figs)
+                charges_string += f"{self.label} {weights[charge_ind]} {charge.indice+1} {rounded_charge}\n"
         return charges_string
 
     def forces_to_string(self, weights=None, default_weights=None, sig_figs=3):
@@ -283,10 +284,9 @@ class ReaxEntry(Entry):
         if self.forces is not None:
             weights = self._get_weights(weights, self.forces, default_weights)
             for force_ind, force in enumerate(self.forces.properties):
-                if weights[force_ind] != 0:
-                    rounded_forces = np.round(force.value, sig_figs)
-                    atom_forces_string = ''.join([str(rounded_force) + ' ' for rounded_force in rounded_forces])
-                    forces_string += f"{self.label}  {weights[force_ind]}  {force.indice+1}  {atom_forces_string}\n"
+                rounded_forces = np.round(force.value, sig_figs)
+                atom_forces_string = ''.join([str(rounded_force) + ' ' for rounded_force in rounded_forces])
+                forces_string += f"{self.label}  {weights[force_ind]}  {force.indice+1}  {atom_forces_string}\n"
         return forces_string
 
     def geometries_to_string(self, geometry_type, weights=None, default_weights=None, sig_figs=3):
@@ -302,10 +302,9 @@ class ReaxEntry(Entry):
         if props is not None:
             weights = self._get_weights(weights, props, default_weights)
             for property_ind, prop in enumerate(props.properties):
-                if weights[property_ind] != 0:
-                    rounded_value = np.round(prop.value, sig_figs)
-                    add_one_indices = ''.join([str(indice+1) + '   ' for indice in prop.indices])
-                    geometry_string += f"{self.label}  {weights[property_ind]}   {add_one_indices}   {rounded_value}\n"
+                rounded_value = np.round(prop.value, sig_figs)
+                add_one_indices = ''.join([str(indice+1) + '   ' for indice in prop.indices])
+                geometry_string += f"{self.label}  {weights[property_ind]}   {add_one_indices}   {rounded_value}\n"
         return geometry_string
 
     def lattice_vectors_to_string(self, weights=None, default_weights=None, sig_figs=3):
@@ -313,9 +312,8 @@ class ReaxEntry(Entry):
         if self.lattice_vectors is not None:
             weights = self._get_weights(weights, self.lattice_vectors, default_weights)
             for lattice_vector_ind, lattice_vector in enumerate(self.lattice_vectors.properties):
-                if weights[lattice_vector_ind] != 0:
-                    rounded_lattice_vector = np.round(lattice_vector.value, sig_figs)
-                    lattice_vector_string += f"{self.label}  {weights[lattice_vector_ind]}    {lattice_vector.parameter}  {rounded_lattice_vector}\n"
+                rounded_lattice_vector = np.round(lattice_vector.value, sig_figs)
+                lattice_vector_string += f"{self.label}  {weights[lattice_vector_ind]}    {lattice_vector.parameter}  {rounded_lattice_vector}\n"
         return lattice_vector_string
 
     def get_property_string(self, property_type, **kwargs):

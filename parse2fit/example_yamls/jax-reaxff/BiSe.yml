@@ -1,94 +1,218 @@
 # Jax-ReaxFF Layout
-# NOTE: Jax-ReaxFF doesn't currently support lattice_vector training, so
-# these flags will be ignored by the optimizer. 
- 
+
 output_format: 'jax-reaxff' # consistent tag across all .yaml
 
 generation_parameters:
-  runs_to_generate: 20
-  output_directory: 'testing'
+  runs_to_generate: 50
+  input_directory: '/gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/training_files/ffield_files/iter1/run3_8805'
+  fix_input_weights: True
+  output_directory: 'iter2'
 
 default_weights: # Default is 50/50 0 or 1
-  energy: 
-    type: 'magnitude'
-    min: 1
-    max: 4
-    kT: 100
+  energy:
+    type: 'binary'
+    min: 0
+    max: 5
+    split: 0
+  #energy: 
+  #  type: 'magnitude'
+  #  min: 1
+  #  max: 5
+  #  kT: 100
   charges: 
     type: 'binary'
     min: 0
     max: 1
-    split: 0.5
+    split: 0.5 # min value
   forces:
     type: 'binary'
     min: 0
-    max: 2
-    split: 0.8
+    max: 1
+    split: 0.5
   distances:
-    type: 'uniform'
+    type: 'binary'
     min: 0
-    max: 2
-    spread: 15
+    max: 1
+    split: 0.5
+  angles:
+    type: 'binary'
+    min: 0
+    max: 1
+    split: 0.5
+  dihedrals:
+    type: 'binary'
+    min: 0
+    max: 1
+    split: 0.95
 
 input_paths:
+
+# Iteration 2 Amorphous single points
+  /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/recrystallization:
+    structure:
+      rutype: 'SINGLE POINT'
+    forces:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 0.95
+    distances:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 0.95
+    angles:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 0.95
+    energy:
+      get_divisors: True
+      subtract:
+        - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
+        - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Se/Se/mp-14/supercell
+
+
+# Iteration 1 Amorphous single points
+  /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/amorphous:
+    structure:
+      rutype: 'SINGLE POINT'
+    forces:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 1 # 0.98
+    distances:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 1 # 0.9985
+    angles:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 1 # 0.9985
+    #dihedrals:
+    #  weights:
+    #    type: 'binary'
+    #    min: 0
+    #    max: 1
+    #    split: 0.9985
+    energy:
+      get_divisors: True
+      subtract:
+        - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/amorphous/amorphous6
+
 # Equations of State
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se/mp-1102082:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se/mp-1102082/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se/mp-1214190:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se/mp-1214190/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi3Se4/mp-542615:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi3Se4/mp-542615/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-23164:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-23164/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi4Se3/mp-27607:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi4Se3/mp-27607/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-570286:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-570286/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-1182022:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-1182022/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-27902:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-27902/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-568844:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-568844/volume_1
 
 # Stress-Strain
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/stress_strain/Bi-Se/Bi2Se3/mp-541837/C11_C33_C13_II:
+    structure:
+      rutype: 'NO CELL OPT'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/stress_strain/Bi-Se/Bi2Se3/mp-541837/C11_C33_C13_II/strain_0.0
 
 # Defects
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/defects/Bi-Se/Bi2Se3/mp-541837/vacancy:
+    structure:
+      rutype: 'NORMAL RUN'
+    forces:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 0.85
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/defects/Bi-Se/Bi2Se3/mp-541837/antisite:
+    structure:
+      rutype: 'NORMAL RUN'
+    forces:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 0.85
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837/volume_1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/defects/Bi-Se/Bi2Se3/mp-541837/interstitial:
+    structure:
+      rutype: 'NORMAL RUN'
+    forces:
+      weights:
+        type: 'binary'
+        min: 0
+        max: 1
+        split: 0.85
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837/volume_1
@@ -96,7 +220,7 @@ input_paths:
 # Formation Energies 
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se/mp-1102082/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
@@ -104,7 +228,7 @@ input_paths:
       get_divisors: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se/mp-1214190/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
@@ -112,7 +236,7 @@ input_paths:
       get_divisors: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi3Se4/mp-542615/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
@@ -120,7 +244,7 @@ input_paths:
       get_divisors: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-23164/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
@@ -128,7 +252,7 @@ input_paths:
       get_divisors: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi2Se3/mp-541837/volume_1:
     structure:
-      rutype: 'CELL OPT 0' 
+      rutype: 'NORMAL RUN' 
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
@@ -138,19 +262,24 @@ input_paths:
     forces: True
     distances: True
     angles: True
-    dihedrals: True
-    #lattice_vectors: True
+    #dihedrals: True
+    #lattice_vectors:
+    #  weights: 1
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/Bi4Se3/mp-27607/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Se/Se/mp-14/supercell
       get_divisors: True
+    forces: True
+    distances: True
+    angles: True
+    #dihedrals: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-570286/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
@@ -158,7 +287,7 @@ input_paths:
       get_divisors: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-1182022/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
@@ -166,15 +295,19 @@ input_paths:
       get_divisors: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-27902/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Se/Se/mp-14/supercell
       get_divisors: True
+    forces: True
+    distances: True
+    angles: True
+    #dihedrals: True
   /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/eq_of_state/Bi-Se/BiSe/mp-568844/volume_1:
     structure:
-      rutype: 'CELL OPT 0'
+      rutype: 'NORMAL RUN'
     energy:
       subtract:
         - /gpfs/wolf2/cades/mat269/scratch/rym/VASP_testing/BiSe_training/mp_bulk/Bi/Bi/mp-23152/supercell

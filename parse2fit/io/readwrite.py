@@ -6,6 +6,8 @@ import yaml
 from pathlib import Path
 import os
 import sys
+from copy import deepcopy
+import re
 
 class YamlManager(ABC):
     def __init__(self, config_path):
@@ -44,14 +46,30 @@ class ReaxRW():
                               'angles', 'dihedrals', 'lattice_vectors']
         self.default_weights = self._set_default_weights(self.config_dct.get('default_weights'))
         self.generation_parameters = self.config_dct.get('generation_parameters')
+        self.geo, self.trainsetin = self._load_input_files()
         self.input_paths = self.config_dct.get('input_paths')
+    
+    def _load_input_files(self):
+        if 'input_directory' in self.generation_parameters:
+            geo_path = os.path.join(self.generation_parameters['input_directory'], 'geo')
+            trainsetin_path = os.path.join(self.generation_parameters['input_directory'], 'trainset.in')
+            if os.path.exists(geo_path):
+                geo = self.file_to_string(geo_path)
+            else:
+                print(f'input_directory tag supplied but {geo_path} does not exist! Using empty default')
+                geo = ''
+            if os.path.exists(trainsetin_path):
+                trainsetin = self.file_to_string(trainsetin_path)
+            else:
+                print(f'input_directory tag supplied but {trainsetin_path} does not exist! Using empty default')
+                trainsetin = ''
+        else:
+            geo, trainsetin = '', ''
+        return geo, trainsetin
 
     def _set_default_weights(self, weight_dct):
         dct = {}
-        default = {'split': 0.5}
-        default['type'] = 'binary'
-        default['min'] = 0
-        default['max'] = 1
+        default = {'split': 0.5, 'min': 0, 'max': 1, 'type': 'binary'}
 
         for prop in self.write_options:
             if prop in weight_dct:
@@ -247,44 +265,108 @@ class ReaxRW():
         return energy_dct
     
     def get_geo_string(self, objects_dictionary):
-        write_string = ''
+        write_string = deepcopy(self.geo) # Copy the geo file string
         for path_i, object_path in enumerate(list(objects_dictionary.keys())):
             reax_obj = objects_dictionary[object_path]['reax_entry']
             structure_args = objects_dictionary[object_path]['structure']
-            write_string += reax_obj.structure_to_string(**structure_args)
+            reax_obj_str = reax_obj.structure_to_string(**structure_args)
+            if reax_obj_str not in write_string: # Check to see if full string is present
+                write_string += reax_obj_str
         return write_string
 
+    def _modify_string(self, main_string, check_string, substitute_string, insert_point_string=None, placeholder='weight', pattern=r"(\d+\.\d*)"):
+        ''' Check for regex pattern, and substitute string into existing string '''
+        escaped_check_string = re.escape(check_string).replace(placeholder, pattern)
+        escaped_pattern = re.compile(escaped_check_string)
+        match = escaped_pattern.search(main_string)
+        if match:
+            if 'fix_input_weights' in self.generation_parameters and self.generation_parameters['fix_input_weights'] is True:
+                #print(f'Input weights are fixed; no modifications to be made to {match.group()}')
+                return main_string # Keep everything fixed, do not change
+            else:
+                if match.group() != substitute_string: # If True, not a header or footer
+                    weight_match = escaped_pattern.search(substitute_string)
+                    weight = float(weight_match.group(1)) # Get the weight from the match
+                    if weight == 0: # Remove zero-valued weight strings from main_string
+                        return main_string.replace(match.group(), '')
+                    else:
+                        return main_string.replace(match.group(), substitute_string) # Replace old string with new string
+                else:
+                    return main_string # Same string is matched, so no changes necessary
+        else:
+            if check_string == substitute_string: # Catches headers, footers
+                return main_string + substitute_string # Add to end
+            else:
+                weight_match = escaped_pattern.search(substitute_string)
+                weight = float(weight_match.group(1)) # Get the weight from the match
+                if weight == 0: # Remove zero-valued weight strings from main_string
+                    return main_string
+                else:
+                    if insert_point_string: # Insert after the insert_point_string variable
+                        position = main_string.find(insert_point_string)
+                        if position != -1: # Finds insert_point_string
+                            insertion_point = position + len(insert_point_string)
+                            return main_string[:insertion_point] + substitute_string + main_string[insertion_point:]
+                        else:
+                            return main_string + substitute_string
+                    else: # No insert_point_string
+                        return main_string + substitute_string
+
+    def _split_lines_and_modify(self, main_string, regex_string, weights_string, insert_point_string=None, placeholder='weight', pattern=r"(\d+\.\d*)"):
+        split_regex_strings = re.split(r'(\n)', regex_string)
+        regex_list = [split_regex_strings[i] + split_regex_strings[i + 1] for i in range(0, len(split_regex_strings) - 1, 2)]
+        split_weights_strings = re.split(r'(\n)', weights_string)
+        weights_list = [split_weights_strings[i] + split_weights_strings[i + 1] for i in range(0, len(split_weights_strings) - 1, 2)]
+        #print(regex_list, weights_list)
+        for i, regex in enumerate(regex_list):
+            main_string = self._modify_string(main_string, regex, weights_list[i], insert_point_string, placeholder, pattern)
+        return main_string
+
     def get_trainsetin_string(self, objects_dictionary, self_energy=False):
-        write_string = ''
+        write_string = deepcopy(self.trainsetin)
         ere = ReaxEntry(label='empty') # For writing headers and footers
         
         # Handling non-Geometry properties
         for write_option in ['charges', 'forces', 'lattice_vectors']:
-            write_string += ere.trainsetin_section_header(write_option)
+            property_start = ere.trainsetin_section_header(write_option)
+            write_string = self._modify_string(write_string, property_start, property_start) # Add start if it doesn't exist
+
             for path_i, object_path in enumerate(list(objects_dictionary.keys())):
                 option_val = objects_dictionary[object_path][write_option]
                 if isinstance(option_val, dict):
                     weights = option_val['weights']
                     reax_obj = objects_dictionary[object_path]['reax_entry']
-                    write_string += reax_obj.get_property_string(write_option, weights=weights, 
+                    re_string = reax_obj.get_property_string(write_option, weights='weight',
+                                                                 default_weights=self.default_weights[write_option]) # For regex
+                    weight_string = reax_obj.get_property_string(write_option, weights=weights,
                                                                  default_weights=self.default_weights[write_option])
-            write_string += ere.trainsetin_section_footer(write_option) 
+                    write_string = self._split_lines_and_modify(write_string, re_string, weight_string, property_start)
+            property_end = ere.trainsetin_section_footer(write_option)
+            write_string = self._modify_string(write_string, property_end, property_end) 
         
         # Handling Geometry Properties
-        write_string += ere.trainsetin_section_header('distances')
+        geometry_start = ere.trainsetin_section_header('distances')
+        write_string = self._modify_string(write_string, geometry_start, geometry_start) # Add start if it doesn't exist
+
         for write_option in ['distances', 'angles', 'dihedrals']:
             for path_i, object_path in enumerate(list(objects_dictionary.keys())):
                 option_val = objects_dictionary[object_path][write_option]
                 if isinstance(option_val, dict):
                     weights = objects_dictionary[object_path][write_option]['weights']
                     reax_obj = objects_dictionary[object_path]['reax_entry']
-                    write_string += reax_obj.get_property_string(write_option, weights=weights, 
-                                                                  default_weights=self.default_weights[write_option])
-        write_string += ere.trainsetin_section_footer('distances')
+                    re_string = reax_obj.get_property_string(write_option, weights='weight',
+                                                                 default_weights=self.default_weights[write_option]) # For regex
+                    weight_string = reax_obj.get_property_string(write_option, weights=weights,
+                                                                 default_weights=self.default_weights[write_option])
+                    write_string = self._split_lines_and_modify(write_string, re_string, weight_string, geometry_start)
+        geometry_end = ere.trainsetin_section_footer('distances')
+        write_string = self._modify_string(write_string, geometry_end, geometry_end)
 
         # Handling energy
         re_dictionary = self._get_relative_energies(objects_dictionary)
-        write_string += ere.trainsetin_section_header('energy')
+        energy_start = ere.trainsetin_section_header('energy')
+        write_string = self._modify_string(write_string, energy_start, energy_start) # Add start if it doesn't exist
+
         for path_j, object_path in enumerate(list(re_dictionary.keys())):
             reax_obj = re_dictionary[object_path]['reax_entry']
             weight = re_dictionary[object_path]['weight']
@@ -293,10 +375,20 @@ class ReaxRW():
             if self_energy == False and (reax_obj in add or reax_obj in subtract):
                 continue # Don't write self energy
             else:
-                write_string += reax_obj.relative_energy_to_string(weight=weight, 
-                            add=add, subtract=subtract, get_divisors=re_dictionary[object_path]['get_divisors'])
-        write_string += ere.trainsetin_section_footer('energy')
+                re_string = reax_obj.relative_energy_to_string(weight='weight', add=add, subtract=subtract,
+                                                               get_divisors=re_dictionary[object_path]['get_divisors'])
+                weight_string = reax_obj.relative_energy_to_string(weight=weight, add=add, subtract=subtract,
+                                                               get_divisors=re_dictionary[object_path]['get_divisors'])
+
+                write_string = self._modify_string(write_string, re_string, weight_string, energy_start)
+        energy_end = ere.trainsetin_section_footer('energy')
+        write_string = self._modify_string(write_string, energy_end, energy_end)
         return write_string
+
+    def file_to_string(self, filepath):
+        with open(filepath, "r") as text_file:
+            data = text_file.read()
+        return data
 
     def string_to_file(self, filepath, write_string):
         with open(filepath, "w") as text_file:
