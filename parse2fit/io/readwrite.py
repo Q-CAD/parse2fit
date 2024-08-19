@@ -96,8 +96,8 @@ class ReaxRW():
     def _get_energy_paths(self):
         relative_energy_paths = []
         for path in self.input_paths:
-            if isinstance(self.input_paths[path]['energy'], dict):
-                if self.input_paths[path].get('energy') is not None:
+            if 'energy' in self.input_paths[path]:
+                if isinstance(self.input_paths[path]['energy'], dict):
                     if self.input_paths[path]['energy'].get('add') is not None:
                         relative_energy_paths += self.input_paths[path]['energy']['add']
                     if self.input_paths[path]['energy'].get('subtract') is not None:
@@ -185,14 +185,14 @@ class ReaxRW():
                         path_dct = self._get_path_values(top_path=path, root_path=root) # Dictionary associated with each path
                         try:
                             objects_dct = self._dct_parser(objects_dct, path_dct, root)
-                        except ValueError:
+                        except (ValueError, AttributeError):
                             continue
             else:
                 if path not in list(objects_dct.keys()):
                     path_dct = self._get_path_values(top_path=path, root_path=path) # Dictionary associated with each path
                     try:
                         objects_dct = self._dct_parser(objects_dct, path_dct, path)
-                    except ValueError: # No DFT code in the root directory being searched
+                    except (ValueError, AttributeError): # No DFT code in the root directory being searched
                         continue
         return objects_dct
 
@@ -422,5 +422,5 @@ class ReaxRW():
                 trainsetin_strings.append(trainsetin_string)
                 unique += 1
             attempts += 1
-        print(f'Finished successfully, {unique} unique trainset.in files written.')
+        print(f'Finished successfully, {unique} unique trainset.in files written to {output_directory}.')
         return

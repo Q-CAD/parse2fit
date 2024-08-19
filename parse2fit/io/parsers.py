@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
-import os
 from parse2fit.core.properties import *
+from parse2fit.io.xml import XMLParser
 from pymatgen.command_line.bader_caller import bader_analysis_from_path
 from pymatgen.io.vasp.outputs import Vasprun
+from pymatgen.io.ase import AseAtomsAdaptor
 from ase.geometry.analysis import Analysis
 from ase.io import read
 from pymatgen.core.structure import Structure
 from xml.etree.ElementTree import ParseError
 import numpy as np
+import os
 
 # Base class for parsers
 class Parser(ABC):
@@ -26,7 +28,7 @@ class Parser(ABC):
     @abstractmethod
     def parse_forces(self):
         pass
-
+    
     @abstractmethod
     def parse_geometries(self, geometry_type):
         pass
@@ -76,22 +78,119 @@ class Parser(ABC):
     @abstractmethod
     def parse_structure(self):
         pass
-
-    @abstractmethod
+    
     def parse_all(self):
-        pass
+        data = {'energy': None, 'structure': None, 'charges': None, 'forces': None,
+                'lattice_vectors': None, 'distances': None, 'angles': None, 'dihedrals': None}
+
+        if self.options.get("pymatgen_structure") is True:
+            data['structure'] = self.parse_structure() # Default if both are specified
+        if self.options.get("ase_atoms") is True:
+            data['structure'] = self.parse_structure()
+        if self.options.get("energy") is True:
+            data['energy'] = self.parse_energy()
+        if self.options.get("charges") is True:
+            data['charges'] = self.parse_charges()
+        if self.options.get("forces") is True:
+            data['forces'] = self.parse_forces()
+        if self.options.get("distances") is True:
+            data['distances'] = self.parse_geometries('distances')
+        if self.options.get("angles") is True:
+            data['angles'] = self.parse_geometries('angles')
+        if self.options.get("dihedrals") is True:
+            data['dihedrals'] = self.parse_geometries('dihedrals')
+        if self.options.get("lattice_vectors") is True:
+            data['lattice_vectors'] = self.parse_lattice_vectors()
+
+        return data
+
+class RMGParser(Parser):
+    def __init__(self, directory, **kwargs):
+        super().__init__(directory, **kwargs)
+        self.rmgrun = XMLParser(os.path.join(self.directory, 'forcefield.xml'))
+        self.structure = self.parse_structure()
+
+    def parse_structure(self):
+        # Returns pymatgen structure object from an RMG .xml file
+        # Subject to change with changes in RMG.xml file format
+        lattice = []
+        lattice_lst = ['./structure', './crystal', './varray', './v']
+        lattice_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, lattice_lst, [None, None, {'name': 'basis'}, None])
+        for i, lattice_el in enumerate(lattice_element_lst):
+            lattice_vector = self.rmgrun.get_formatted_element_text(lattice_el)
+            lattice.append(lattice_vector)
+        top_lattice_element = self.rmgrun.find_by_elements(self.rmgrun.root, lattice_lst[:-1], [None, None, {'name': 'basis'}])[0]
+        unit = self.rmgrun.get_element_attrib(top_lattice_element, 'units')
+        if unit == 'bohr': # Do the conversion here, can change this
+            lattice = np.array(lattice) * 0.529177
+
+        species = []
+        species_lst = ['./atominfo', './array', './set', './rc']
+        species_elements_lst = self.rmgrun.find_by_elements(self.rmgrun.root, species_lst,
+                                       [None, {'name': 'atoms'}, None, None])
+        for sel in species_elements_lst:
+            specie_element = self.rmgrun.find_by_elements(sel, ['./c'], [{'name': 'element'}])[0]
+            specie = self.rmgrun.get_formatted_element_text(specie_element)
+            species.append(specie)
+
+        coordinates = []
+        coordinates_lst = ['./structure', './varray', './v']
+        coordinates_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, coordinates_lst, [None, {'name': 'positions'}, None])
+        for i, coordinates_el in enumerate(coordinates_element_lst):
+            coordinate_vector = self.rmgrun.get_formatted_element_text(coordinates_el)
+            coordinates.append(coordinate_vector)
+
+        structure = Structure(lattice=lattice, species=species, coords=coordinates, coords_are_cartesian=False)
+        return structure
+
+    def parse_energy(self):
+        energy_lst = ['./energy', './i']
+        energy_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, energy_lst, [None, {'name': 'total'}])
+        return Energy(value=self.rmgrun.get_formatted_element_text(energy_element_lst[0]), 
+                unit=self.rmgrun.get_element_attrib(self.rmgrun.tree.find('./energy'), 'units'))
+
+    def parse_charges(self):
+        print(f'Charge parsing not supported for RMG DFT in {self.directory}!')
+        return None
+
+    def parse_forces(self):
+        force_lst = ['./varray', './v']
+        top_force_element = self.rmgrun.find_by_elements(self.rmgrun.root, [force_lst[0]], [{'name': 'forces'}])[0]
+        forces_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, force_lst, [{'name': 'forces'}, None])
+        forces = []
+        for i, forces_el in enumerate(forces_element_lst):
+            forces.append(Force(value=self.rmgrun.get_formatted_element_text(forces_el), specie=self.structure[i].specie, indice=i,
+                      unit=self.rmgrun.get_element_attrib(top_force_element, 'units')))
+        return PropertyCollection(properties=forces)
+
+    def parse_geometries(self, geometry_type):
+        atoms = AseAtomsAdaptor().get_atoms(self.structure)
+        if geometry_type == 'distances':
+            unit = 'Angstrom'
+        elif geometry_type == 'angles' or geometry_type == 'dihedrals':
+            unit = 'degrees'
+        return PropertyCollection(self._get_ase_geometries(atoms, geometry_type, unit))
+
+    def parse_lattice_vectors(self):
+        lattice_vectors = []
+        atoms = AseAtomsAdaptor().get_atoms(self.structure)
+        lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[0])), vector=list(atoms.cell[0]),
+                                             parameter='a', unit='Angstrom'))
+        lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[1])), vector=list(atoms.cell[1]),
+                                             parameter='b', unit='Angstrom'))
+        lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[2])), vector=list(atoms.cell[2]),
+                                             parameter='c', unit='Angstrom'))
+        return PropertyCollection(lattice_vectors)
 
 class VaspParser(Parser):
     def __init__(self, directory, **kwargs):
         super().__init__(directory, **kwargs) 
         self.vasprun = Vasprun(os.path.join(self.directory, 'vasprun.xml'))
+        self.structure = self.parse_structure()
 
     def parse_structure(self):
-        contcar = os.path.join(self.directory, 'CONTCAR')
-        if self.options.get("pymatgen_structure") is True:
-            return Structure.from_file(contcar)
-        elif self.options.get("ase_atoms") is True:
-            return read(contcar)
+        #contcar = os.path.join(self.directory, 'CONTCAR')
+        return self.vasprun.final_structure
 
     def parse_energy(self):
         return Energy(value=float(self.vasprun.final_energy), unit='eV')
@@ -123,7 +222,7 @@ class VaspParser(Parser):
         return PropertyCollection(forces)
 
     def parse_geometries(self, geometry_type):
-        atoms = read(os.path.join(self.directory, 'CONTCAR'))
+        atoms = AseAtomsAdaptor().get_atoms(self.structure)
         if geometry_type == 'distances':
             unit = 'Angstrom'
         elif geometry_type == 'angles' or geometry_type == 'dihedrals':
@@ -132,8 +231,7 @@ class VaspParser(Parser):
 
     def parse_lattice_vectors(self):
         lattice_vectors = []
-        contcar_path = os.path.join(self.directory, 'CONTCAR')
-        atoms = read(contcar_path)
+        atoms = AseAtomsAdaptor().get_atoms(self.structure)
         lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[0])), vector=list(atoms.cell[0]), 
                                              parameter='a', unit='Angstrom'))
         lattice_vectors.append(LatticeVector(value=float(np.linalg.norm(atoms.cell[1])), vector=list(atoms.cell[1]), 
@@ -142,31 +240,6 @@ class VaspParser(Parser):
                                              parameter='c', unit='Angstrom'))
         return PropertyCollection(lattice_vectors)
 
-    def parse_all(self):
-        data = {'energy': None, 'structure': None, 'charges': None, 'forces': None, 
-                'lattice_vectors': None, 'distances': None, 'angles': None, 'dihedrals': None}
-
-        if self.options.get("pymatgen_structure") is True:
-            data['structure'] = self.parse_structure() # Default if both are specified
-        if self.options.get("ase_atoms") is True:
-            data['structure'] = self.parse_structure()
-        if self.options.get("energy") is True:
-            data['energy'] = self.parse_energy()
-        if self.options.get("charges") is True:
-            data['charges'] = self.parse_charges()
-        if self.options.get("forces") is True:
-            data['forces'] = self.parse_forces()
-        if self.options.get("distances") is True:
-            data['distances'] = self.parse_geometries('distances')
-        if self.options.get("angles") is True:
-            data['angles'] = self.parse_geometries('angles')
-        if self.options.get("dihedrals") is True:
-            data['dihedrals'] = self.parse_geometries('dihedrals')
-        if self.options.get("lattice_vectors") is True:
-            data['lattice_vectors'] = self.parse_lattice_vectors()
-
-        return data
-    
 # Factory to create the correct parser
 class ParserFactory:
     @staticmethod
@@ -176,9 +249,31 @@ class ParserFactory:
         # This could be expanded to handle other DFT codes
         if os.path.exists(os.path.join(directory, "vasprun.xml")):
             try:
-                return VaspParser(directory, **kwargs)
+                v_path = os.path.join(directory, "vasprun.xml")
+                v = Vasprun(v_path)
             except ParseError:
-                raise ValueError(f"Issue parsing vasprun.xml in directory: {directory}")
-        else:
-            raise ValueError(f"Unsupported DFT code for directory: {directory}")
+                #raise ValueError(f"Cannot parse vasprun.xml in {directory}")
+                return None
+            if v.converged is True:
+                print(f"Converged vasprun.xml in {directory}; parsing")
+                return VaspParser(directory, **kwargs)
+            else:
+                print(f"vasprun.xml in {directory} is not converged; not parsing")
+                return None
 
+        if os.path.exists(os.path.join(directory, 'forcefield.xml')): # Subject to name change
+            try:
+                rmg_path = os.path.join(directory, "forcefield.xml")
+                r = XMLParser(rmg_path)
+            except ParserError:
+                #raise ValueError(f"Cannot parse forcefield.xml in {directory}")
+                return None
+            converged_element = r.find_by_elements(r.root, ['converged', 'convergent'], [None, None])[0]
+            converged = r.get_formatted_element_text(converged_element)
+            if converged is True:
+                print(f"Converged forcefield.xml in {directory}; parsing")
+                return RMGParser(directory, **kwargs)
+            else:
+                print(f"forcefield.xml in {directory} is not converged; not parsing")
+                return None
+        return None

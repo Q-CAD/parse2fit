@@ -40,7 +40,7 @@ class WeightedSampler:
         max_val = self.dist_params.get('max')
         spread = self.dist_params.get('spread') # positive integer
         if len(self.values) == 1: 
-            return float(max_val)
+            return [float(max_val)]
         elif len(self.values) == 0:
             return None
         else:
@@ -54,7 +54,7 @@ class WeightedSampler:
         max_val = self.dist_params.get('max')
         sigma = self.dist_params.get('sigma') # positive float
         if len(self.values) == 1:
-            return float(max_val)
+            return [float(max_val)]
         elif len(self.values) == 0:
             return None
         else:
@@ -67,7 +67,7 @@ class WeightedSampler:
         max_val = self.dist_params.get('max')
         kT = self.dist_params.get('kT') # float
         if len(self.values) == 1:
-            return float(max_val)
+            return [float(max_val)]
         elif len(self.values) == 0:
             return None
         else:
@@ -84,7 +84,7 @@ class WeightedSampler:
         number = 10**str(split)[::-1].find('.') # Give the split based on number of decimal places provided
         choose_from = [min_val for i in range(int(number*split))] + [max_val for i in range(int(number*(1-split)))]
         if len(self.values) == 1:
-            return float(max_val)
+            return [float(max_val)]
         elif len(self.values) == 0:
             return None
         else:

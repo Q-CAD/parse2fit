@@ -4,8 +4,9 @@ class UnitConverter:
         'energy': {
             'eV': 1.0,
             'kcal/mol': 23.0605478,
-            'Rydberg': 13.605693009,
-            'Hartree': 27.2114,
+            'Rydberg': 0.0734986,
+            'Hartree': 0.0367493,
+            'Ha': 0.0367493, 
             # Add more energy units here
         },
         'charge': {
@@ -15,8 +16,9 @@ class UnitConverter:
         },
         'force': {
             'eV/Angstrom': 1.0,
-            'Rydberg/Bohr': 25.71104309541616,
-            'Hartree/Bohr': 51.42208619083232,
+            'Rydberg/Bohr': 0.038893784,
+            'Hartree/Bohr': 0.019446892,
+            'Ha/a0': 0.0367493, # For RMG
             '(kcal/mol)/Angstrom': 23.0605478,  # (kcal/mol)/Å to eV/Å
             # Add more force units here
         },
