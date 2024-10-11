@@ -186,7 +186,7 @@ class ReaxEntry(Entry):
             if divisors is not None:
                 energy = Energy(value=self._compute_total_energy(reax_objs, divisors, signs), unit=self.energy.unit)
             else:
-                print(f"No divisors compute relative energies of ReaxObjs passed!")
+                print(f"No divisors compute relative energies of ReaxObj {self.label} passed!")
                 divisors = [None for reax_obj in reax_objs]
                 energy = Energy(value=None, unit=self.energy.unit)
         else:
