@@ -1,17 +1,22 @@
 import sys
+import re
 import xml.etree.ElementTree as ET
 import numpy as np
 
 class XMLParser:
-    def __init__(self, xml_path):
-        self.tree = ET.parse(xml_path)
-        self.root = self.tree.getroot()
+    def __init__(self, xml_path, false_root=True):
+        if false_root is False:
+            self.root = ET.parse(xml_path).getroot()
+        else:
+            with open(xml_path) as f:
+                xml = f.read()
+            self.root = ET.fromstring(re.sub(r"(<\?xml[^>]+\?>)", r"\1<root>", xml) + "</root>")
 
     def evaluate_type(self, val, val_type):
         # Add array-parsing logic here
         if val_type == "string":
             return val
-        elif val_type == 'float' or val_type == 'int':
+        elif val_type == 'float' or val_type == 'int' or val_type == 'boolean':
             return eval(val)
         elif val_type == 'array':
             return [eval(f) for f in val.split()]
@@ -59,8 +64,8 @@ class XMLParser:
         else:
             return None
 
-    def get_formatted_element_text(self, element):
-        val_type = self.get_element_attrib(element, 'type')
+    def get_formatted_element_text(self, element, val_type=None):
+        #val_type = self.get_element_attrib(element, 'type')
         if val_type == None: # Non-specific value parsing
             try:
                 return eval(element.text)

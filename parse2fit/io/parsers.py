@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from parse2fit.core.properties import *
 from parse2fit.io.xml import XMLParser
-from pymatgen.command_line.bader_caller import bader_analysis_from_path
-from pymatgen.io.vasp.outputs import Vasprun
+from pymatgen.command_line.bader_caller import bader_analysis_from_objects
+from pymatgen.io.vasp.outputs import Vasprun, Chgcar
+from pymatgen.io.vasp.inputs import Potcar
 from pymatgen.io.ase import AseAtomsAdaptor
 from ase.geometry.analysis import Analysis
 from ase.io import read
@@ -10,6 +11,7 @@ from pymatgen.core.structure import Structure
 from xml.etree.ElementTree import ParseError
 import numpy as np
 import os
+import sys
 
 # Base class for parsers
 class Parser(ABC):
@@ -117,37 +119,43 @@ class RMGParser(Parser):
         lattice_lst = ['./structure', './crystal', './varray', './v']
         lattice_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, lattice_lst, [None, None, {'name': 'basis'}, None])
         for i, lattice_el in enumerate(lattice_element_lst):
-            lattice_vector = self.rmgrun.get_formatted_element_text(lattice_el)
+            lattice_vector = self.rmgrun.get_formatted_element_text(lattice_el, 'array')
             lattice.append(lattice_vector)
         top_lattice_element = self.rmgrun.find_by_elements(self.rmgrun.root, lattice_lst[:-1], [None, None, {'name': 'basis'}])[0]
-        unit = self.rmgrun.get_element_attrib(top_lattice_element, 'units')
-        if unit == 'bohr': # Do the conversion here, can change this
-            lattice = np.array(lattice) * 0.529177
+        lattice_unit = self.rmgrun.get_element_attrib(top_lattice_element, 'units')
+        if lattice_unit == 'bohr': # Do the conversion here, can change this
+            lattice = np.array(lattice) * 0.529177 # Convert Bohr to Angstroms
 
         species = []
         species_lst = ['./atominfo', './array', './set', './rc']
         species_elements_lst = self.rmgrun.find_by_elements(self.rmgrun.root, species_lst,
                                        [None, {'name': 'atoms'}, None, None])
         for sel in species_elements_lst:
-            specie_element = self.rmgrun.find_by_elements(sel, ['./c'], [{'name': 'element'}])[0]
-            specie = self.rmgrun.get_formatted_element_text(specie_element)
+            specie_element = self.rmgrun.find_by_elements(sel, ['./c'], [None])[0]
+            specie = self.rmgrun.get_formatted_element_text(specie_element, 'string')
             species.append(specie)
 
         coordinates = []
         coordinates_lst = ['./structure', './varray', './v']
         coordinates_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, coordinates_lst, [None, {'name': 'positions'}, None])
         for i, coordinates_el in enumerate(coordinates_element_lst):
-            coordinate_vector = self.rmgrun.get_formatted_element_text(coordinates_el)
+            coordinate_vector = self.rmgrun.get_formatted_element_text(coordinates_el, 'array')
             coordinates.append(coordinate_vector)
-
-        structure = Structure(lattice=lattice, species=species, coords=coordinates, coords_are_cartesian=False)
+        
+        top_position_element = self.rmgrun.find_by_elements(self.rmgrun.root, coordinates_lst[:-1], [None, {'name': 'positions'}])[0]
+        position_unit = self.rmgrun.get_element_attrib(top_position_element, 'units')
+        if position_unit == 'crystal':
+            structure = Structure(lattice=lattice, species=species, coords=coordinates, coords_are_cartesian=False)
+        else:
+            print(f'Units "{position_unit}" for position not currently supported!')
+            sys.exit(1)
         return structure
 
     def parse_energy(self):
         energy_lst = ['./energy', './i']
         energy_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, energy_lst, [None, {'name': 'total'}])
-        return Energy(value=self.rmgrun.get_formatted_element_text(energy_element_lst[0]), 
-                unit=self.rmgrun.get_element_attrib(self.rmgrun.tree.find('./energy'), 'units'))
+        return Energy(value=self.rmgrun.get_formatted_element_text(energy_element_lst[0], 'float'), 
+                unit=self.rmgrun.get_element_attrib(self.rmgrun.root.find('./energy'), 'units'))
 
     def parse_charges(self):
         print(f'Charge parsing not supported for RMG DFT in {self.directory}!')
@@ -159,7 +167,7 @@ class RMGParser(Parser):
         forces_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, force_lst, [{'name': 'forces'}, None])
         forces = []
         for i, forces_el in enumerate(forces_element_lst):
-            forces.append(Force(value=self.rmgrun.get_formatted_element_text(forces_el), specie=self.structure[i].specie, indice=i,
+            forces.append(Force(value=self.rmgrun.get_formatted_element_text(forces_el, 'array'), specie=self.structure[i].specie, indice=i,
                       unit=self.rmgrun.get_element_attrib(top_force_element, 'units')))
         return PropertyCollection(properties=forces)
 
@@ -201,15 +209,20 @@ class VaspParser(Parser):
         chgcar_path = os.path.join(self.directory, 'CHGCAR')
         aeccar0_path = os.path.join(self.directory, 'AECCAR0')
         aeccar2_path = os.path.join(self.directory, 'AECCAR2')
+        potcar_path = os.path.join(self.directory, 'POTCAR')
 
-        if os.path.exists(chgcar_path) and os.path.exists(aeccar0_path) and os.path.exists(aeccar2_path):
+        if os.path.exists(chgcar_path) and os.path.exists(aeccar0_path) and os.path.exists(aeccar2_path) and os.path.exists(potcar_path):
             print(f'Performing Bader Analysis for {self.directory}')
-            charge_dct = bader_analysis_from_path(self.directory) # Requires bader executable
+            chgcar = Chgcar.from_file(chgcar_path)
+            aeccar0 = Chgcar.from_file(aeccar0_path)
+            aeccar2 = Chgcar.from_file(aeccar2_path)
+            potcar = Potcar.from_file(potcar_path)
+            charge_dct = bader_analysis_from_objects(chgcar=chgcar, potcar=potcar, aeccar0=aeccar0, aeccar2=aeccar2) # Requires bader executable
             for i, transferred in enumerate(charge_dct['charge_transfer']):
                 charges.append(Charge(indice=i, value=-1*transferred, unit="e",
                                        specie=str(self.vasprun.ionic_steps[-1]['structure'][i].specie)))
         else: # No CHGCAR to parse
-            print(f'No CHGCAR, AECCAR0 or AECCAR2 found in {self.directory}; no charges on structure')
+            print(f'No CHGCAR, POTCAR, AECCAR0 or AECCAR2 found in {self.directory}; no charges on structure')
             pass
         return PropertyCollection(charges)
 
@@ -269,7 +282,7 @@ class ParserFactory:
                 #raise ValueError(f"Cannot parse forcefield.xml in {directory}")
                 return None
             converged_element = r.find_by_elements(r.root, ['converged', 'convergent'], [None, None])[0]
-            converged = r.get_formatted_element_text(converged_element)
+            converged = r.get_formatted_element_text(converged_element, 'boolean')
             if converged is True:
                 print(f"Converged forcefield.xml in {directory}; parsing")
                 return RMGParser(directory, **kwargs)
