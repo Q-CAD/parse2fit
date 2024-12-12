@@ -81,7 +81,7 @@ class ReaxRW():
                 dct[prop] = default
         return dct 
     
-    def _default_labeling(self, path, label, num=6):
+    def _default_labeling(self, path, label, num=3):
         if num > 0:
             directory_split = os.path.split(path)
             new_directory = directory_split[0]
