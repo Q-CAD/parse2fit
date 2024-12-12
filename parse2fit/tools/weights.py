@@ -39,13 +39,15 @@ class WeightedSampler:
         min_val = self.dist_params.get('min')
         max_val = self.dist_params.get('max')
         spread = self.dist_params.get('spread') # positive integer
+        scale = self.dist_params.get('scale')
         if len(self.values) == 1: 
-            return [float(max_val)]
+            return np.multiply(scale, [float(max_val)])
         elif len(self.values) == 0:
             return None
         else:
             values = list(np.random.randint(0, spread, size=len(self.values)))
-            return self.set_max_min(min_val, max_val, values)
+            weights = np.round(np.multiply(scale, self.set_max_min(min_val, max_val, values)), 3)
+            return weights
 
     def normal_weighting(self):
         # Return positive values from normal distribution
@@ -53,42 +55,49 @@ class WeightedSampler:
         min_val = self.dist_params.get('min')
         max_val = self.dist_params.get('max')
         sigma = self.dist_params.get('sigma') # positive float
+        scale = self.dist_params.get('scale')
         if len(self.values) == 1:
-            return [float(max_val)]
+            return np.multiply(scale, [float(max_val)])
         elif len(self.values) == 0:
             return None
         else:
             values = np.abs(np.random.normal(0, sigma, size=len(self.values)))
-            return self.set_max_min(min_val, max_val, values)
+            weights = np.round(np.multiply(scale, self.set_max_min(min_val, max_val, values)), 3)
+            return weights
 
     def magnitude_weighting(self):
         # Larger magnitudes weighted more
         min_val = self.dist_params.get('min')
         max_val = self.dist_params.get('max')
         kT = self.dist_params.get('kT') # float
+        scale = self.dist_params.get('scale')
         if len(self.values) == 1:
-            return [float(max_val)]
+            return np.multiply(scale, [float(max_val)])
         elif len(self.values) == 0:
             return None
         else:
-            starting_values = np.exp(np.array(np.abs(self.values))/kT)
-            shift_values = np.random.normal(0, np.min(starting_values)*0.68, size=len(self.values))
+            starting_values = np.exp(np.array(np.divide(self.values, kT)))
+            shift_values = np.random.normal(0, np.min(starting_values)*0.68, size=len(self.values)) # Add noise to the distribution
             values = [starting_values[i] + shift_values[i] for i in range(len(starting_values))]
-            return self.set_max_min(min_val, max_val, values)
+            weights = np.round(np.multiply(scale, self.set_max_min(min_val, max_val, values)), 3)
+            print(weights)
+            return weights
 
     def binary_weighting(self):
         # One value or other
         min_val = self.dist_params.get('min')
         max_val = self.dist_params.get('max')
-        split = float(self.dist_params.get('split')) # positive float between 0 and 1
+        split = self.dist_params.get('split') # positive float between 0 and 1
         number = 10**str(split)[::-1].find('.') # Give the split based on number of decimal places provided
-        choose_from = [min_val for i in range(int(number*split))] + [max_val for i in range(int(number*(1-split)))]
+        low_vals, high_vals = [float(min_val) for i in range(int(number*split))], [float(max_val) for i in range(int(number*(1-split)))]
+        choose_from = low_vals + high_vals
         if len(self.values) == 1:
             return [float(max_val)]
         elif len(self.values) == 0:
             return None
         else:
-            assignments = list(np.random.randint(low=0, high=number-1, size=len(self.values)))
-            return [float(choose_from[i]) for i in assignments]
+            assignments = list(np.random.randint(low=0, high=number, size=len(self.values)))
+            weights = [choose_from[i] for i in assignments]
+            return weights
 
 

@@ -10,15 +10,11 @@ generation_parameters:
 
 default_weights: # Default is 50/50 0 or 1
   energy:
-    type: 'binary'
-    min: 0
-    max: 5
-    split: 0
-  #energy: 
-  #  type: 'magnitude'
-  #  min: 1
-  #  max: 5
-  #  kT: 100
+    type: 'magnitude'
+    min: 20
+    max: 100
+    kT: 15
+    scale: 0.05
   charges: 
     type: 'binary'
     min: 0

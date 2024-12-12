@@ -158,8 +158,14 @@ class RMGParser(Parser):
                 unit=self.rmgrun.get_element_attrib(self.rmgrun.root.find('./energy'), 'units'))
 
     def parse_charges(self):
-        print(f'Charge parsing not supported for RMG DFT in {self.directory}!')
-        return None
+        charge_lst = ['./varray', './v']
+        charges_element_lst = self.rmgrun.find_by_elements(self.rmgrun.root, charge_lst, [{'name': 'voronoi_charge'}, None])
+        charges = []
+        for i, charges_el in enumerate(charges_element_lst):
+            charges.append(Charge(value=self.rmgrun.get_formatted_element_text(charges_el), specie=self.structure[i].specie, indice=i, 
+                       unit='e')) # Only supported unit right now is 'e'; can change if code changes 
+        #print(f'Charge parsing not supported for RMG DFT in {self.directory}!')
+        return PropertyCollection(properties=charges)
 
     def parse_forces(self):
         force_lst = ['./varray', './v']
