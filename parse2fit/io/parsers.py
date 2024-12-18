@@ -273,11 +273,11 @@ class ParserFactory:
             except ParseError:
                 #raise ValueError(f"Cannot parse vasprun.xml in {directory}")
                 return None
-            if v.converged is True:
-                print(f"Converged vasprun.xml in {directory}; parsing")
+            if v.converged_electronic is True:
+                print(f"Electronically converged vasprun.xml in {directory}; parsing")
                 return VaspParser(directory, **kwargs)
             else:
-                print(f"vasprun.xml in {directory} is not converged; not parsing")
+                print(f"vasprun.xml in {directory} is not electronically converged; not parsing")
                 return None
 
         if os.path.exists(os.path.join(directory, 'forcefield.xml')): # Subject to name change
@@ -287,12 +287,12 @@ class ParserFactory:
             except ParserError:
                 #raise ValueError(f"Cannot parse forcefield.xml in {directory}")
                 return None
-            converged_element = r.find_by_elements(r.root, ['converged', 'convergent'], [None, None])[0]
-            converged = r.get_formatted_element_text(converged_element, 'boolean')
-            if converged is True:
-                print(f"Converged forcefield.xml in {directory}; parsing")
+            converged_electronic_element = r.find_by_elements(r.root, ['converged', 'scf'], [None, None])[0]
+            converged_electronic = r.get_formatted_element_text(converged_electronic_element, 'boolean')
+            if converged_electronic is True:
+                print(f"Electronically converged forcefield.xml in {directory}; parsing")
                 return RMGParser(directory, **kwargs)
             else:
-                print(f"forcefield.xml in {directory} is not converged; not parsing")
+                print(f"forcefield.xml in {directory} is not electronically converged; not parsing")
                 return None
         return None
