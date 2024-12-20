@@ -16,17 +16,7 @@ Future updates will add support for parsing raw files into intermediate data typ
 
         conda env create -f Ensemble-FF-fit.yml
 
-3. Build `openbabel3` with Python bindings following [OpenBabel's instructions](https://open-babel.readthedocs.io/en/latest/Installation/install.html#install-binaries):
-
-    a. Add library paths to `.bashrc` or export them: 
-
-        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/bin/openbabel3-install/lib/:$HOME/bin/openbabel3-install/lib64"
-
-    b. Add site packages to `.bashrc` or export: 
-
-        export PYTHONPATH="$PYTHONPATH:$HOME/bin/openbabel3-install/lib/python3.11/site-packages/"
-
-4. Install `parse2fit` in the conda environment:
+3. Install `parse2fit` in the conda environment:
 
         python setup.py install
 

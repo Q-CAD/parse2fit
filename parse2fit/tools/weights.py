@@ -80,7 +80,6 @@ class WeightedSampler:
             shift_values = np.random.normal(0, np.min(starting_values)*0.68, size=len(self.values)) # Add noise to the distribution
             values = [starting_values[i] + shift_values[i] for i in range(len(starting_values))]
             weights = np.round(np.multiply(scale, self.set_max_min(min_val, max_val, values)), 3)
-            print(weights)
             return weights
 
     def binary_weighting(self):
