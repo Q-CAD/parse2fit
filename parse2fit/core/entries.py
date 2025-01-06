@@ -6,7 +6,8 @@ from parse2fit.tools.unitconverter import UnitConverter
 from pymatgen.core.structure import Structure
 from ase import Atoms
 import numpy as np
-import itertools
+import math
+from itertools import product
 
 # Base class for Entries
 class Entry(ABC):
@@ -204,18 +205,22 @@ class ReaxEntry(Entry):
     def _relative_energy_substring(self, weight, relative_energy, reax_objs, divisors, signs, sig_figs):
         relative_energy_str = f' {weight}'
         for i, reax_obj in enumerate(reax_objs):
-            relative_energy_str += f'   {signs[i]}   {reax_obj.label} /{divisors[i]}'
+            if divisors[i] != 0:
+                relative_energy_str += f'   {signs[i]}   {reax_obj.label} /{divisors[i]}'
         rounded_energy = np.round(relative_energy.value, sig_figs)
+        if math.isclose(rounded_energy, 0):
+            rounded_energy = 1e-4
         relative_energy_str += f'       {rounded_energy}\n'
         return relative_energy_str
 
     def _compute_total_energy(self, reax_objs, divisors, signs):
         total_energy = 0
         for i, reax_obj in enumerate(reax_objs):
-            if signs[i] == '+':
-                total_energy += (reax_obj.energy.value / divisors[i])
-            else:
-                total_energy += -1 * (reax_obj.energy.value / divisors[i])
+            if divisors[i] != 0:
+                if signs[i] == '+':
+                    total_energy += (reax_obj.energy.value / divisors[i])
+                else:
+                    total_energy += -1 * (reax_obj.energy.value / divisors[i])
         return total_energy
 
     def _integer_divisors(self, integer):
@@ -236,7 +241,10 @@ class ReaxEntry(Entry):
     def _sums_to_zero(self, divisor_combo, all_dcts, all_signs):
         final_dct = {}
         for comp_i, comp_divisor in enumerate(divisor_combo):
-            divided_dct = {k: (v / comp_divisor)*(all_signs[comp_i]) for k, v in all_dcts[comp_i].items()}
+            if comp_divisor == 0: # Makes it so some relative energies can be ignored
+                divided_dct = {k: 0 for k in all_dcts[comp_i].keys()}
+            else:
+                divided_dct = {k: (v / comp_divisor)*(all_signs[comp_i]) for k, v in all_dcts[comp_i].items()}
             final_dct = {k: final_dct.get(k, 0) + divided_dct.get(k, 0) for k in set(final_dct) | set(divided_dct)}
 
         if all(v == 0 for v in final_dct.values()): # All values equal zero
@@ -244,31 +252,74 @@ class ReaxEntry(Entry):
         else:
             return False
 
-    def _get_divisors_to_write(self, add_reax_lst, subtract_reax_lst):
+    def _evaluate_divisor_combo(self, args):
+        """
+        Worker function to evaluate a divisor combination.
+        """
+        divisor_combo, all_dcts, all_multipliers, fewest_refs, reax_objs, signs = args
+        if not self._sums_to_zero(divisor_combo, all_dcts, all_multipliers):
+            return None
+
+        if fewest_refs:
+            zero_count = list(divisor_combo).count(0)
+            active_refs = len(divisor_combo) - zero_count
+            sum_divisors = sum(divisor_combo)
+            return {"divisor_combo": list(divisor_combo), "active_refs": active_refs, "sum_divisors": sum_divisors}
+
+        relative_energy = self._compute_total_energy(reax_objs, divisor_combo, signs)
+        normalized_energy = relative_energy / (len(self.structure) / divisor_combo[0])
+        return {"divisor_combo": list(divisor_combo), "normalized_energy": normalized_energy}
+
+    def _find_best_divisor_combo(self, all_dcts, all_multipliers, all_divisors, add_reax_lst, subtract_reax_lst, fewest_refs):
+        """
+        Optimized function to find the best divisor combo.
+        """
+        
+        # Generate all possible divisor combinations
+        divisor_combos = list(product(*all_divisors))
+
+        # Prepare input arguments for multiprocessing
+        reax_objs = [self] + add_reax_lst + subtract_reax_lst
+        signs = ['+' if m == 1 else '-' for m in all_multipliers]
+        pool_args = [(combo, all_dcts, all_multipliers, fewest_refs, reax_objs, signs) for combo in divisor_combos]
+        
+        # Use serial processing to evaluate combinations
+        results = []
+        for pool_arg in pool_args:
+            results.append(self._evaluate_divisor_combo(pool_arg))
+
+        # Filter out invalid results
+        valid_results = [result for result in results if result is not None]
+        
+        if fewest_refs:
+            # Sort first by active_refs (ascending), then by sum_divisors (descending)
+            valid_results.sort(key=lambda x: (x["active_refs"], -x["sum_divisors"]))
+            return valid_results[0]["divisor_combo"] if valid_results else None
+
+        else:
+            # Find the combo with the largest normalized relative energy
+            valid_results.sort(key=lambda x: x["normalized_energy"], reverse=True)
+            return valid_results[0]["divisor_combo"] if valid_results else None
+
+    def _get_divisors_to_write(self, add_reax_lst, subtract_reax_lst, fewest_refs=True):
         all_dcts, all_multipliers, all_divisors = [], [], []
 
         all_dcts.append(self.site_counts())
-        all_divisors.append(self._composition_divisors(self.site_counts()))
         all_multipliers.append(1) # Treat these as positives
+        all_divisors.append(self._composition_divisors(self.site_counts())) # Don't add zero to self
         for acd in add_reax_lst:
             a_site_counts = acd.site_counts()
             all_dcts.append(a_site_counts)
             all_multipliers.append(1)
-            all_divisors.append(acd._composition_divisors(a_site_counts))
+            all_divisors.append(acd._composition_divisors(a_site_counts) + [0]) # Add zero so these can be ignored
         for scd in subtract_reax_lst:
             s_site_counts = scd.site_counts()
             all_dcts.append(s_site_counts)
             all_multipliers.append(-1)
-            all_divisors.append(scd._composition_divisors(s_site_counts))
-        divisor_combos = list(itertools.product(*all_divisors))
+            all_divisors.append(scd._composition_divisors(s_site_counts) + [0]) # Add zero so these can be ignored
         
-        use_divisors = None
-        for divisor_combo in divisor_combos:
-            if self._sums_to_zero(divisor_combo, all_dcts, all_multipliers) is True:
-                use_divisors = list(divisor_combo) # Take the first one found
-                break
-
-        return use_divisors
+        divisor = self._find_best_divisor_combo(all_dcts, all_multipliers, all_divisors, add_reax_lst, subtract_reax_lst, fewest_refs)
+        return divisor
 
     def charges_to_string(self, weights=None, default_weights=None, sig_figs=3):
         charges_string = ''

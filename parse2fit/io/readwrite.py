@@ -2,12 +2,16 @@ from abc import ABC, abstractmethod
 from parse2fit.core.entries import ReaxEntry
 from parse2fit.io.parsers import ParserFactory
 from parse2fit.tools.weights import WeightedSampler
+import warnings
 import yaml
 from pathlib import Path
 import os
 import sys
+from multiprocessing import Pool
 from copy import deepcopy
 import re
+
+warnings.filterwarnings('ignore')
 
 class YamlManager(ABC):
     def __init__(self, config_path):
@@ -158,6 +162,68 @@ class ReaxRW():
         else:
             return True
 
+    # Multiprocessing parsing
+    #'''
+    def _dct_parser(self, path_dct, path):
+        # Simplified version of your existing _dct_parser function
+        try:
+            parsed_dct = ParserFactory.create_parser(path,
+                pymatgen_structure=self._none_false(path_dct['structure'].get('pymatgen_structure')),
+                ase_atoms=self._none_false(path_dct['structure'].get('ase_atoms')),
+                periodic_geometries=self._none_false(self.generation_parameters.get('periodic_geometries')), 
+                energy=self._none_false(path_dct.get('energy')),
+                charges=self._none_false(path_dct.get('charges')),
+                forces=self._none_false(path_dct.get('forces')),
+                distances=self._none_false(path_dct.get('distances')),
+                angles=self._none_false(path_dct.get('angles')),
+                dihedrals=self._none_false(path_dct.get('dihedrals')),
+                lattice_vectors=self._none_false(path_dct.get('lattice_vectors'))
+                ).parse_all()
+            reax_entry = ReaxEntry(label=path_dct['label'])
+            reax_entry.from_dict(parsed_dct)
+            #print(f'ReaxFF entry is: {reax_entry}')
+            path_dct['reax_entry'] = reax_entry
+            return path_dct
+        except AttributeError:
+            return None
+
+    def _get_all_paths(self, paths, walk_roots):
+        all_paths = [] # top path, root path or top path, top path
+        for path in paths:
+            if walk_roots:
+                for root, _, _ in os.walk(os.path.abspath(path), topdown=True):
+                    all_paths.append((path, root))
+            else:
+                all_paths.append((path, path))
+        #print(all_paths)
+        return all_paths
+
+    def _worker_task(self, path):
+        try:
+            path_dct = self._get_path_values(top_path=path[0], root_path=path[1])  # Dictionary associated with each path
+            parsed_dct = self._dct_parser(path_dct, path[1])
+            return (path[1], parsed_dct) # Returns the parsed dictionary
+        except (ValueError, AttributeError):  # Handle errors
+            return None
+
+    def _build_objects_dct(self, objects_dct, paths, walk_roots=True):
+        # Step 1: Gather all paths
+        all_paths = self._get_all_paths(paths, walk_roots)
+
+        # Step 2: Parallelize parsing using multiprocessing
+        with Pool() as pool:
+            results = pool.map(self._worker_task, all_paths)
+        
+        # Step 3: Aggregate results
+        for i, result in enumerate(results):
+            if result[1]:  # Ignore null values for object construction
+                if all_paths[i][1] not in list(objects_dct.keys()):
+                    objects_dct[result[0]] = result[1]
+
+        return objects_dct
+    #'''
+    # Serialized parsing
+    '''
     def _dct_parser(self, objects_dct, path_dct, path):
         parsed_dct = ParserFactory.create_parser(path,
                 pymatgen_structure=self._none_false(path_dct['structure'].get('pymatgen_structure')),
@@ -195,6 +261,7 @@ class ReaxRW():
                     except (ValueError, AttributeError): # No DFT code in the root directory being searched
                         continue
         return objects_dct
+    '''
 
     def _check_paths(self, paths_list):
         for path in paths_list:
@@ -398,6 +465,7 @@ class ReaxRW():
     def write_trainsetins(self, attempt_multiplier=5, self_energy=False):
         print('Constructing ReaxFF objects dictionary...')
         objects_dictionary = self._construct_objects_dct()
+        #print(objects_dictionary)
         geo_string = self.get_geo_string(objects_dictionary)
 
         runs_to_generate = self.generation_parameters['runs_to_generate']

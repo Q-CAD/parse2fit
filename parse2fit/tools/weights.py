@@ -41,7 +41,7 @@ class WeightedSampler:
         spread = self.dist_params.get('spread') # positive integer
         scale = self.dist_params.get('scale')
         if len(self.values) == 1: 
-            return np.multiply(scale, [float(max_val)])
+            return np.round(np.multiply(scale, [float(max_val)]), 3)
         elif len(self.values) == 0:
             return None
         else:
@@ -57,7 +57,7 @@ class WeightedSampler:
         sigma = self.dist_params.get('sigma') # positive float
         scale = self.dist_params.get('scale')
         if len(self.values) == 1:
-            return np.multiply(scale, [float(max_val)])
+            return np.round(np.multiply(scale, [float(max_val)]), 3)
         elif len(self.values) == 0:
             return None
         else:
@@ -72,7 +72,7 @@ class WeightedSampler:
         kT = self.dist_params.get('kT') # float
         scale = self.dist_params.get('scale')
         if len(self.values) == 1:
-            return np.multiply(scale, [float(max_val)])
+            return np.round(np.multiply(scale, [float(max_val)]), 3)
         elif len(self.values) == 0:
             return None
         else:
