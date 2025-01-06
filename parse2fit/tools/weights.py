@@ -88,7 +88,8 @@ class WeightedSampler:
         max_val = self.dist_params.get('max')
         split = self.dist_params.get('split') # positive float between 0 and 1
         number = 10**str(split)[::-1].find('.') # Give the split based on number of decimal places provided
-        low_vals, high_vals = [float(min_val) for i in range(int(number*split))], [float(max_val) for i in range(int(number*(1-split)))]
+        low, high = np.rint(number * split), np.rint(number*(1.0-split))
+        low_vals, high_vals = [float(min_val) for i in range(int(low))], [float(max_val) for i in range(int(high))]
         choose_from = low_vals + high_vals
         if len(self.values) == 1:
             return [float(max_val)]
