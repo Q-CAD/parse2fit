@@ -163,7 +163,7 @@ class ReaxRW():
             return True
 
     # Multiprocessing parsing
-    #'''
+    '''
     def _dct_parser(self, path_dct, path):
         # Simplified version of your existing _dct_parser function
         try:
@@ -221,9 +221,9 @@ class ReaxRW():
                     objects_dct[result[0]] = result[1]
 
         return objects_dct
-    #'''
-    # Serialized parsing
     '''
+    # Serialized parsing
+    #'''
     def _dct_parser(self, objects_dct, path_dct, path):
         parsed_dct = ParserFactory.create_parser(path,
                 pymatgen_structure=self._none_false(path_dct['structure'].get('pymatgen_structure')),
@@ -261,7 +261,7 @@ class ReaxRW():
                     except (ValueError, AttributeError): # No DFT code in the root directory being searched
                         continue
         return objects_dct
-    '''
+    #'''
 
     def _check_paths(self, paths_list):
         for path in paths_list:
@@ -321,7 +321,8 @@ class ReaxRW():
             elif isinstance(weights, float):
                 energy_dct[energy_path]['weight'] = weights
             elif isinstance(weights, dict): # Different dictionary
-                energy_dct[energy_path]['weight'] = WeightedSampler([relative_energy], weights)
+                # WARNING: Doesn't work for magnitude weighting within the same path !!!
+                energy_dct[energy_path]['weight'] = WeightedSampler([relative_energy], weights).sample()[0]
         
         super_weights = WeightedSampler(super_values, self.default_weights['energy']).sample()
         for i, super_path in enumerate(super_paths):
@@ -446,7 +447,6 @@ class ReaxRW():
                                                                get_divisors=re_dictionary[object_path]['get_divisors'])
                 weight_string = reax_obj.relative_energy_to_string(weight=weight, add=add, subtract=subtract,
                                                                get_divisors=re_dictionary[object_path]['get_divisors'])
-
                 write_string = self._modify_string(write_string, re_string, weight_string, energy_start)
         energy_end = ere.trainsetin_section_footer('energy')
         write_string = self._modify_string(write_string, energy_end, energy_end)

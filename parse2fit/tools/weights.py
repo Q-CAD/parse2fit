@@ -1,4 +1,5 @@
 import numpy as np
+import random
 
 class WeightedSampler:
     def __init__(self, values, dist_params):
@@ -86,13 +87,14 @@ class WeightedSampler:
         # One value or other
         min_val = self.dist_params.get('min')
         max_val = self.dist_params.get('max')
-        split = self.dist_params.get('split') # positive float between 0 and 1
+        split = float(self.dist_params.get('split')) # positive float between 0 and 1
         number = 10**str(split)[::-1].find('.') # Give the split based on number of decimal places provided
         low, high = np.rint(number * split), np.rint(number*(1.0-split))
         low_vals, high_vals = [float(min_val) for i in range(int(low))], [float(max_val) for i in range(int(high))]
         choose_from = low_vals + high_vals
         if len(self.values) == 1:
-            return [float(max_val)]
+            return random.choices([float(min_val), float(max_val)], weights=[split, 1-split]) 
+            #return [float(max_val)]
         elif len(self.values) == 0:
             return None
         else:
