@@ -1,0 +1,41 @@
+# ReaxFF Layout
+
+output_format: 'reaxff' # consistent tag across all .yaml
+
+generation_parameters:
+  runs_to_generate: 1
+  #input_directory: # Not supported
+  #fix_input_weights: False # Not supported
+  output_directory: 'reaxff_vasp'
+
+default_weights: # Default is 50/50 0 or 1
+  energy: 1 
+
+input_paths:
+  "Elemental_Bi_Reference":
+    directories:
+      - vasp/Bi
+    energy: True
+
+  "Elemental_Se_Reference":
+    directories:
+      - vasp/Se
+    energy: True
+
+  "Bi2Se3_Formation_Energy":
+    directories:
+      - vasp/Bi2Se3          
+    structure:
+      rutype: "NORMAL RUN"
+    energy:
+      weights: 5
+      subtract:
+        - vasp/Bi
+        - vasp/Se
+      get_divisors: True 
+    forces: True
+    distances: True
+    angles: True
+    dihedrals: True
+    lattice_vectors: True
+    charges: True

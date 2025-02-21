@@ -84,5 +84,5 @@ class StructuretoString:
             bgf += hetatoms_writer(s)
             return bgf
 
-        return bgf_writer(self.structure, self.label, self.options.get("rutype"))
+        return bgf_writer(self.structure, self.label, self.options.get("rutype", None))
 

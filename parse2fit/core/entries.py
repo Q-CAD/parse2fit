@@ -8,12 +8,16 @@ from ase import Atoms
 import numpy as np
 import math
 from itertools import product
+import os
+import json
 
 # Base class for Entries
 class Entry(ABC):
-    def __init__(self, label, structure=None, energy=None, charges=None, forces=None, 
-            distances=None, angles=None, dihedrals=None, lattice_vectors=None, **kwargs):
+    def __init__(self, group_name=None, label=None, structure=None, energy=None, 
+            charges=None, forces=None, distances=None, angles=None, 
+            dihedrals=None, lattice_vectors=None, stress_vectors=None, **kwargs):
         
+        self.group_name = group_name
         self.label = label
         self.structure = structure
         self.energy = energy
@@ -23,6 +27,7 @@ class Entry(ABC):
         self.angles = angles
         self.dihedrals = dihedrals
         self.lattice_vectors = lattice_vectors
+        self.stress_vectors = stress_vectors
 
     @abstractmethod
     def __repr__(self):
@@ -32,39 +37,177 @@ class Entry(ABC):
     def from_dict(self):
         pass
 
-    @abstractmethod
-    def structure_to_string(self):
-        pass
+    def _correct_units(self):
+        # Scalar conversions
+        if self.energy:
+            self.energy.convert_units('energy', self.units_dct['energy'])
+        if self.charges:
+            for charge in self.charges.properties:
+                charge.convert_units('charge', self.units_dct['charge'])
+        if self.distances:
+            for distance in self.distances.properties:
+                distance.convert_units('length', self.units_dct['length'])
+        if self.angles:
+            for angle in self.angles.properties:
+                angle.convert_units('angle', self.units_dct['angle'])
+        if self.dihedrals:
+            for dihedral in self.dihedrals.properties:
+                dihedral.convert_units('angle', self.units_dct['angle'])
 
-    @abstractmethod
-    def energy_to_string(self):
-        pass
+        # Vector conversions 
+        uc = UnitConverter()
+        if self.forces:
+            for force in self.forces.properties:
+                force.vector = uc.convert(force.vector, force.unit,
+                                                   self.units_dct['force'], 'force')
+                force.convert_units('force', self.units_dct['force'])
+        if self.lattice_vectors:
+            for lattice_vector in self.lattice_vectors.properties:
+                lattice_vector.vector = uc.convert(lattice_vector.vector, lattice_vector.unit,
+                                                   self.units_dct['length'], 'length')
+                lattice_vector.convert_units('length', self.units_dct['length'])
+        if self.stress_vectors:
+            for stress_vector in self.stress_vectors.properties:
+                stress_vector.vector = uc.convert(stress_vector.vector, stress_vector.unit,
+                                                   self.units_dct['pressure'], 'pressure')
+                stress_vector.convert_units('pressure', self.units_dct['pressure'])
 
-    @abstractmethod
-    def charges_to_string(self):
-        pass
+class FitSNAPEntry(Entry):
+    def __init__(self, group_name=None, label=None, structure=None, energy=None, forces=None,
+            lattice_vectors=None, stress_vectors=None, **kwargs):
 
-    @abstractmethod
-    def forces_to_string(self):
-        pass
+        super().__init__(group_name=group_name,
+                         label=label, 
+                         structure=structure, 
+                         energy=energy,
+                         charges=None, 
+                         forces=forces, 
+                         distances=None,
+                         angles=None, 
+                         dihedrals=None, 
+                         lattice_vectors=lattice_vectors, 
+                         stress_vectors=stress_vectors)
+        
+        self.units_dct = {'energy': 'eV',
+                     'force': 'eV/Angstrom',
+                     'length': 'Angstrom',
+                     'pressure': 'bar'}
 
-    @abstractmethod
-    def geometries_to_string(self):
-        pass
+        self._correct_units() # Yield the correct units for FitSNAP
 
-    @abstractmethod
-    def lattice_vectors_to_string(self):
-        pass
+    def __repr__(self):
+        return f"FitSNAPEntry(group_name={self.group_name}, label={self.label})"
+
+    def from_dict(self, data):
+        supported = ['group_name', 'label', 'structure', 'energy', 
+                     'forces', 'lattice_vectors', 'stress_vectors']
+        for property_type in supported:
+            if property_type in data:
+                setattr(self, property_type, data[property_type])
+        self._correct_units()
+        return self
+
+    def to_dct(self):
+        data_dct = {}
+        data_dct['Dataset'] = {}
+        data_dct['Dataset']['Label'] = self.label
+        data_dct['Dataset']['Data'] = [{}]
+
+        # Add the structural information
+        data_dct['Dataset']['Data'][0]['NumAtoms'] = len(self.structure)
+        data_dct['Dataset']['AtomTypeStyle'] = 'chemicalsymbol'
+        data_dct['Dataset']['Data'][0]['AtomTypes'] = [site.species_string for site in self.structure]
+        data_dct['Dataset']['PositionsStyle'] = 'angstrom'
+        data_dct['Dataset']['Data'][0]['Positions'] = self.structure.frac_coords.tolist()
+
+        # Add remaining information
+        if self.energy:
+            data_dct['Dataset']['EnergyStyle'] = 'electronvolt'
+            data_dct['Dataset']['Data'][0]['Energy'] = self.energy.value
+        if self.forces:
+            data_dct['Dataset']['ForcesStyle'] = 'electronvoltperangstrom'
+            data_dct['Dataset']['Data'][0]['Forces'] = [force.vector for force in self.forces.properties]
+        if self.lattice_vectors:
+            data_dct['Dataset']['LatticeStyle'] = 'angstrom' 
+            data_dct['Dataset']['Data'][0]['Lattice'] = [lattice_vector.vector for lattice_vector in self.lattice_vectors.properties]
+        if self.stress_vectors:
+            data_dct['Dataset']['StressStyle'] = 'bar'
+            data_dct['Dataset']['Data'][0]['Stress'] = [stress_vector.vector for stress_vector in self.stress_vectors.properties]
+
+        return data_dct
+
+    def to_xyz(self):
+        xyz_string = f"{len(self.structure)}\n"
+
+        # Lattice vectors
+        if self.lattice_vectors:
+            lattice = " ".join(str(c) for v in self.lattice_vectors.properties for c in v.vector)
+            xyz_string += f'Lattice="{lattice}" '
+
+        # Properties and energy
+        xyz_string += 'Properties=species:S:1:pos:R:3'
+        if self.forces:
+            xyz_string += ':forces:R:3'
+        xyz_string += ' '
+        if self.energy:
+            xyz_string += f'energy={self.energy.value} '
+
+        # Stress vectors
+        if self.stress_vectors:
+            stress = " ".join(str(c) for v in self.stress_vectors.properties for c in v.vector)
+            xyz_string += f'stress="{stress}" '
+
+        xyz_string += '\n'
+
+        # Atomic positions and forces
+        for i, site in enumerate(self.structure):
+            xyz_string += f"{site.specie} {' '.join(map(str, site.coords))} "
+            if self.forces:
+                force = next(force.vector for force in self.forces.properties if force.indice == i)
+                xyz_string += f"{' '.join(map(str, force))}"
+            xyz_string += '\n'
+
+        return xyz_string
+
+    def write_dct(self, write_path):
+        """ Writes .json with FitSNAP formatting """
+        full_write_path = os.path.join(write_path, self.group_name)
+        os.makedirs(full_write_path, exist_ok=True)
+        path_name = os.path.join(full_write_path, f'{self.label}.json')
+        with open(path_name, 'w') as d:
+            json.dump(self.to_dct(), d)
+
+    def write_xyz(self, write_path):
+        """ Writes .xyz with FitSNAP formatting """
+        os.makedirs(write_path, exist_ok=True)
+        path_name = os.path.join(write_path, f'{self.group_name}.xyz')
+        with open(path_name, 'a') as f:
+            f.write(self.to_xyz())
 
 
 class ReaxEntry(Entry):
-    def __init__(self, label, structure=None, energy=None, charges=None, forces=None,
+    def __init__(self, group_name=None, label=None, structure=None, energy=None, charges=None, forces=None,
             distances=None, angles=None, dihedrals=None, lattice_vectors=None, **kwargs):
-        super().__init__(label, structure, energy, 
-                         charges, forces, distances, 
-                         angles, dihedrals, lattice_vectors)
+
+        super().__init__(group_name=group_name,
+                         label=label, 
+                         structure=structure, 
+                         energy=energy, 
+                         charges=charges, 
+                         forces=forces, 
+                         distances=distances, 
+                         angles=angles, 
+                         dihedrals=dihedrals, 
+                         lattice_vectors=lattice_vectors, 
+                         stress_vectors=None)
+
+        self.write_zero = kwargs.get('write_zero', False)
 
         self._correct_units() # Yield the correct units for ReaxFF
+        
+        self.units_dct = {'energy': 'kcal/mol', 'charge': 'e',
+                     'force': '(kcal/mol)/Angstrom', 'length': 'Angstrom',
+                     'angle': 'degrees'}
 
     def __repr__(self):
         return f"ReaxEntry(label={self.label})"
@@ -78,34 +221,6 @@ class ReaxEntry(Entry):
         self._correct_units()
         return self
        
-    def _correct_units(self):
-        units_dct = {'energy': 'kcal/mol', 'charge': 'e', 
-                     'force': '(kcal/mol)/Angstrom', 'length': 'Angstrom', 
-                     'angle': 'degrees'}
-        if self.energy:
-            self.energy.convert_units('energy', units_dct['energy'])
-        if self.charges:
-            for charge in self.charges.properties:
-                charge.convert_units('charge', units_dct['charge'])
-        if self.forces:
-            for force in self.forces.properties:
-                force.convert_units('force', units_dct['force'])
-        if self.distances:
-            for distance in self.distances.properties:
-                distance.convert_units('length', units_dct['length'])
-        if self.angles:
-            for angle in self.angles.properties:
-                angle.convert_units('angle', units_dct['angle'])
-        if self.dihedrals:
-            for dihedral in self.dihedrals.properties:
-                dihedral.convert_units('angle', units_dct['angle'])
-        if self.lattice_vectors:
-            uc = UnitConverter()
-            for lattice_vector in self.lattice_vectors.properties:
-                lattice_vector.convert_units('length', units_dct['length'])
-                lattice_vector.vector = uc.convert(lattice_vector.vector, lattice_vector.unit, 
-                                                   units_dct['length'], 'length')
-            
     def site_counts(self):
         if self.structure:
             site_counts = {}
@@ -199,7 +314,8 @@ class ReaxEntry(Entry):
         relative_energy_str = ''
         reax_objs, signs, divisors, relative_energy = self.get_relative_energy(add, subtract, get_divisors)
         if relative_energy.value is not None: # No appropriate divisors found
-            relative_energy_str += self._relative_energy_substring(weight, relative_energy, reax_objs, divisors, signs, sig_figs)
+            if not (self.write_zero is False and weight == 0):
+                relative_energy_str += self._relative_energy_substring(weight, relative_energy, reax_objs, divisors, signs, sig_figs)
         return relative_energy_str
 
     def _relative_energy_substring(self, weight, relative_energy, reax_objs, divisors, signs, sig_figs):
@@ -326,8 +442,9 @@ class ReaxEntry(Entry):
         if self.charges is not None:
             weights = self._get_weights(weights, self.charges, default_weights)
             for charge_ind, charge in enumerate(self.charges.properties):
-                rounded_charge = np.round(charge.value, sig_figs)
-                charges_string += f"{self.label} {weights[charge_ind]} {charge.indice+1} {rounded_charge}\n"
+                if not (self.write_zero is False and weights[charge_ind] == 0):
+                    rounded_charge = np.round(charge.value, sig_figs)
+                    charges_string += f"{self.label} {weights[charge_ind]} {charge.indice+1} {rounded_charge}\n"
         return charges_string
 
     def forces_to_string(self, weights=None, default_weights=None, sig_figs=3):
@@ -335,9 +452,10 @@ class ReaxEntry(Entry):
         if self.forces is not None:
             weights = self._get_weights(weights, self.forces, default_weights)
             for force_ind, force in enumerate(self.forces.properties):
-                rounded_forces = np.round(force.value, sig_figs)
-                atom_forces_string = ''.join([str(rounded_force) + ' ' for rounded_force in rounded_forces])
-                forces_string += f"{self.label}  {weights[force_ind]}  {force.indice+1}  {atom_forces_string}\n"
+                if not (self.write_zero is False and weights[force_ind] == 0):
+                    rounded_forces = np.round(force.vector, sig_figs)
+                    atom_forces_string = ''.join([str(rounded_force) + ' ' for rounded_force in rounded_forces])
+                    forces_string += f"{self.label}  {weights[force_ind]}  {force.indice+1}  {atom_forces_string}\n"
         return forces_string
 
     def geometries_to_string(self, geometry_type, weights=None, default_weights=None, sig_figs=3):
@@ -353,9 +471,10 @@ class ReaxEntry(Entry):
         if props is not None:
             weights = self._get_weights(weights, props, default_weights)
             for property_ind, prop in enumerate(props.properties):
-                rounded_value = np.round(prop.value, sig_figs)
-                add_one_indices = ''.join([str(indice+1) + '   ' for indice in prop.indices])
-                geometry_string += f"{self.label}  {weights[property_ind]}   {add_one_indices}   {rounded_value}\n"
+                if not (self.write_zero is False and weights[property_ind] == 0):
+                    rounded_value = np.round(prop.value, sig_figs)
+                    add_one_indices = ''.join([str(indice+1) + '   ' for indice in prop.indices])
+                    geometry_string += f"{self.label}  {weights[property_ind]}   {add_one_indices}   {rounded_value}\n"
         return geometry_string
 
     def lattice_vectors_to_string(self, weights=None, default_weights=None, sig_figs=3):
@@ -363,8 +482,9 @@ class ReaxEntry(Entry):
         if self.lattice_vectors is not None:
             weights = self._get_weights(weights, self.lattice_vectors, default_weights)
             for lattice_vector_ind, lattice_vector in enumerate(self.lattice_vectors.properties):
-                rounded_lattice_vector = np.round(lattice_vector.value, sig_figs)
-                lattice_vector_string += f"{self.label}  {weights[lattice_vector_ind]}    {lattice_vector.parameter}  {rounded_lattice_vector}\n"
+                if not (self.write_zero is False and weights[lattice_vector_ind] == 0):
+                    rounded_lattice_vector = np.round(lattice_vector.value, sig_figs)
+                    lattice_vector_string += f"{self.label}  {weights[lattice_vector_ind]}    {lattice_vector.parameter}  {rounded_lattice_vector}\n"
         return lattice_vector_string
 
     def get_property_string(self, property_type, **kwargs):

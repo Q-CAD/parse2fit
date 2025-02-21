@@ -49,10 +49,10 @@ class WeightedSampler:
         if len(self.values) == 0:
             return None
         if len(self.values) == 1:
-            return np.round(scale * max_val, 3)
+            return float(np.round(scale * max_val, 3))
 
         random_values = np.random.randint(0, spread, size=len(self.values))
-        return np.round(self.set_max_min(min_val, max_val, scale * random_values), 3)
+        return [float(val) for val in np.round(self.set_max_min(min_val, max_val, scale * random_values), 3)]
 
     def normal_weighting(self):
         """ Assign weights based on a normal distribution. """
@@ -62,10 +62,10 @@ class WeightedSampler:
         if len(self.values) == 0:
             return None
         if len(self.values) == 1:
-            return np.round(scale * max_val, 3)
+            return float(np.round(scale * max_val, 3))
 
         normal_values = np.abs(np.random.normal(0, sigma, size=len(self.values)))
-        return np.round(self.set_max_min(min_val, max_val, scale * normal_values), 3)
+        return [float(val) for val in np.round(self.set_max_min(min_val, max_val, scale * normal_values), 3)]
 
     def magnitude_weighting(self):
         """ Assign weights with higher values getting more weight. """
@@ -75,12 +75,12 @@ class WeightedSampler:
         if len(self.values) == 0:
             return None
         if len(self.values) == 1:
-            return np.round(scale * max_val, 3)
+            return float(np.round(scale * max_val, 3))
 
         exp_values = np.exp(self.values / kT)
         noise = np.random.normal(0, np.min(exp_values) * 0.68, size=len(self.values))
         noisy_values = exp_values + noise
-        return np.round(self.set_max_min(min_val, max_val, scale * noisy_values), 3)
+        return [float(val) for val in np.round(self.set_max_min(min_val, max_val, scale * noisy_values), 3)]
 
     def lognormal_weighting(self):
         """ Assign weights based on a lognormal distribution. """
@@ -90,10 +90,10 @@ class WeightedSampler:
         if len(self.values) == 0:
             return None
         if len(self.values) == 1:
-            return np.round(scale * max_val, 3)
+            return float(np.round(scale * max_val, 3))
 
         lognormal_values = np.random.lognormal(mu, sigma, size=len(self.values))
-        return np.round(self.set_max_min(min_val, max_val, scale * lognormal_values), 3)
+        return [float(val) for val in np.round(self.set_max_min(min_val, max_val, scale * lognormal_values), 3)]
 
     def binary_weighting(self):
         """ Assign weights as either `min_val` or `max_val` based on probability `split`. """
@@ -103,9 +103,9 @@ class WeightedSampler:
         if len(self.values) == 0:
             return None
         if len(self.values) == 1:
-            return np.round(random.choices([min_val, max_val], weights=[split, 1 - split]), 3)
+            return float(np.round(random.choices([min_val, max_val], weights=[split, 1 - split]), 3))
 
         choices = np.random.choice([min_val, max_val], size=len(self.values), p=[split, 1 - split])
-        return np.round(choices, 3)
+        return [float(val) for val in np.round(choices, 3)]
 
 

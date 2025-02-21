@@ -3,9 +3,13 @@ class UnitConverter:
     conversion_factors = {
         'energy': {
             'eV': 1.0,
+            'eV/atom': 1.0,
             'kcal/mol': 23.0605478,
+            'kcal': 23.0605478,
             'Rydberg': 0.0734986,
+            'Rydberg/atom': 0.0734986,
             'Hartree': 0.0367493,
+            'Hartree/atom': 0.0367493,
             'Ha': 0.0367493, 
             # Add more energy units here
         },
@@ -29,6 +33,11 @@ class UnitConverter:
         'angle': {
             'degrees': 1.0,
             'radians': 0.0174533,
+        },
+
+        'pressure': {
+            'bar': 1.0,
+            'kbar': 0.001, 
         },
         # Add other properties and their units here
     }

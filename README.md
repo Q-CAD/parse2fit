@@ -1,6 +1,6 @@
 # `parse2fit`
 
-![alt text](Ensemble-FF-fit.jpg?raw=true)
+![alt text](Ensemble-FF-Fit.jpg?raw=true)
 
 `parse2fit` parses DFT calculations into input files for force field training. It currently supports VASP and RMG DFT codes and the Reax force field.
 

@@ -47,13 +47,14 @@ class Charge(Property):
         return f"Charge(specie={self.specie}, indice={self.indice}, charge={self.value}, unit={self.unit})"
 
 class Force(Property):
-    def __init__(self, value=None, unit=None, indice=None, specie=None):
+    def __init__(self, value=None, vector=None, unit=None, indice=None, specie=None):
         super().__init__(value, unit)
         self.indice = indice
         self.specie = specie
+        self.vector = vector
 
     def __repr__(self):
-        return f"Force(specie={self.specie}, indice={self.indice}, force={self.value}, unit={self.unit})"
+        return f"Force(specie={self.specie}, indice={self.indice}, vector={self.vector}, magnitude={self.value}, unit={self.unit})"
 
 class Geometry(Property):
     def __init__(self, value=None, unit=None, indices=None, species=None, geometry_type=None):
@@ -74,4 +75,11 @@ class LatticeVector(Property):
     def __repr__(self):
         return f"LatticeVector(parameter={self.parameter}, vector={self.vector}, magnitude={self.value}, unit={self.unit})"
 
+class StressVector(Property):
+    def __init__(self, value=None, unit=None, vector=None, parameter=None):
+        super().__init__(value, unit)
+        self.vector = vector
+        self.parameter = parameter
 
+    def __repr__(self):
+        return f"StressVector(parameter={self.parameter}, vector={self.vector}, magnitude={self.value}, unit={self.unit})"
