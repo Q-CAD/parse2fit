@@ -82,6 +82,7 @@ Energy references: Specify reference states for adding and subtracting energies 
 
 # ReaxFF Layout
 
+```bash
 output_format: 'reaxff' # consistent tag across all .yaml
 
 generation_parameters:
@@ -119,6 +120,7 @@ input_paths:
     dihedrals: True
     lattice_vectors: True
     charges: True
+```
 
 Energies are written to `trainset.in` without duplicates, and shorter or named directory paths are prioritized.
 
