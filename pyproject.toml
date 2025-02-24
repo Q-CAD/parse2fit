@@ -11,13 +11,15 @@ license = { file = "LICENSE" }
 authors = [
     { name = "Ryan Morelock", email = "rym@ornl.gov" }
 ]
+requires-python = ">=3.8"
 dependencies = [
     "numpy",  # Add your dependencies here
     "ase",
     "pymatgen"
 ]
 
-dynamic = ["requires-python"]  # This makes `requires-python` dynamic
+[project.scripts]
+generate_parse2fit = "parse2fit.generate_parse2fit_cli:main"
 
 [tool.setuptools]
 packages = ["parse2fit"]  # Ensure this matches your package directory name

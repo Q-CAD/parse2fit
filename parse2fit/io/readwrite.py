@@ -127,9 +127,15 @@ class RW(ABC):
 
     def _default_labeling(self, path, label='', depth=3):
         """Generates default labels by iterating up the directory hierarchy."""
+        def sanitize_filename(filename, replacement="_"):
+            # Define a regex pattern for invalid characters
+            pattern = r'[\/:*?"<>|\' .]'  # Matches all restricted characters
+            return re.sub(pattern, replacement, filename)
+
         if depth == 0:
             return label
         new_label = os.path.basename(path) if not label else f"{os.path.basename(path)}_{label}"
+        new_label = sanitize_filename(new_label)
         return self._default_labeling(os.path.dirname(path), new_label, depth - 1)
 
     def _get_path_dictionary_values(self, group_name):
@@ -658,8 +664,8 @@ class ReaxRW(RW):
         return
 
 
-# Old input file modification code; could re-introduce
-'''
+    # Old input file modification code; could re-introduce
+    '''
     def _modify_string(self, main_str, check_str, sub_str, insert_point_str=None, placeholder='weight', pattern=r"(\d+\.\d*)"):
         """ Modifies a string by replacing or inserting values based on regex matching. """
 
@@ -710,4 +716,4 @@ class ReaxRW(RW):
 
         return main_str
 
-'''
+    '''

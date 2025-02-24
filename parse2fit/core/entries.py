@@ -175,7 +175,7 @@ class FitSNAPEntry(Entry):
         os.makedirs(full_write_path, exist_ok=True)
         path_name = os.path.join(full_write_path, f'{self.label}.json')
         with open(path_name, 'w') as d:
-            json.dump(self.to_dct(), d)
+            json.dump(self.to_dct(), d, indent=4)
 
     def write_xyz(self, write_path):
         """ Writes .xyz with FitSNAP formatting """
