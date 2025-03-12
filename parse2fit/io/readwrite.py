@@ -450,7 +450,7 @@ class FitSNAPRW(RW):
 
     def get_group_section(self, label_weights_dct):
         group_section_string = "[GROUPS]\n"
-        group_section_string += "group_sections = name training_size testing_size weight fweight vweight\n"
+        group_section_string += "group_sections = name training_size testing_size eweight fweight vweight\n"
         group_section_string += "group_types = str float float float float float\n"
         
         if 'groups' in self.method_parameters.items():
