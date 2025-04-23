@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,19 +8,14 @@ version = "0.1.0"
 description = "Framework to parse DFT outputs for FF fitting"
 readme = "README.md"
 license = { file = "LICENSE" }
-authors = [
-    { name = "Ryan Morelock", email = "rym@ornl.gov" }
-]
+authors = [{ name = "Ryan Morelock", email = "rym@ornl.gov" }]
 requires-python = ">=3.8"
-dependencies = [
-    "numpy",  # Add your dependencies here
-    "ase",
-    "pymatgen"
-]
+dependencies = ["numpy", "ase", "pymatgen"]
 
 [project.scripts]
 generate_parse2fit = "parse2fit.generate_parse2fit_cli:main"
 
-[tool.setuptools]
-packages = ["parse2fit"]  # Ensure this matches your package directory name
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["parse2fit", "parse2fit.*"]
 

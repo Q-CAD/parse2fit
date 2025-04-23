@@ -228,7 +228,7 @@ class VaspParser(Parser):
         stress = self.vasprun.ionic_steps[-1]['stress']
         params = ['x', 'y', 'z']
         return PropertyCollection([
-            StressVector(value=float(np.linalg.norm(stress[i])), vector=stress[i], parameter=params[i], unit='kbar')
+            StressVector(value=float(np.linalg.norm(stress[i])), vector=[float(j) for j in stress[i]], parameter=params[i], unit='kbar')
             for i in range(3)
         ])
 
