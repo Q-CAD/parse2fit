@@ -26,13 +26,15 @@ class WeightedSampler:
 
         return method()
 
-    def set_max_min(self, min_val, max_val, values):
+    def set_max_min(self, min_val, max_val, values, round_to=0.025):
         """ Scale values to a defined range [min_val, max_val]. """
         if np.ptp(values) == 0:  # If all values are the same, return min_val for all
             return np.full_like(values, min_val, dtype=float)
         
-        scaled_values = np.rint(np.interp(values, (np.min(values), np.max(values)), (min_val, max_val)))
-        return np.round(scaled_values, 3)
+        scaled_values = np.interp(values, (np.min(values), np.max(values)), (min_val, max_val))
+        round_scaled_values = np.array([round(x * (1/round_to)) / (1/round_to) if x not in (min_val, max_val) else x for x in scaled_values])
+        return round_scaled_values
+        #return np.round(scaled_values, 3)
 
     def validate_params(self, required_keys):
         """ Check that all required keys are present in dist_params. """
@@ -65,6 +67,7 @@ class WeightedSampler:
             return float(np.round(scale * max_val, 3))
 
         normal_values = np.abs(np.random.normal(0, sigma, size=len(self.values)))
+        print(normal_values)
         return [float(val) for val in np.round(self.set_max_min(min_val, max_val, scale * normal_values), 3)]
 
     def magnitude_weighting(self):

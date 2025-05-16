@@ -122,7 +122,7 @@ class RW(ABC):
     def _set_default_weights(self, weight_dct):
         """Sets default weights for various properties."""
         default = {'split': 0.0, 'min': 0.0, 'max': 1.0, 'type': 'binary'}
-        return {prop: weight_dct.get(prop, default) if isinstance(weight_dct.get(prop), dict) else default
+        return {prop: weight_dct.get(prop, default) if isinstance(weight_dct, dict) and isinstance(weight_dct.get(prop, None), dict) else default
                 for prop in self.write_options}
 
     def _default_labeling(self, path, label='', depth=3):
@@ -258,7 +258,7 @@ class RW(ABC):
     def _build_objects_dct_by_root(self):
         # Step 1: construct the path_root_dictionary
         root_dct = self._path_root_dictionary()
-
+        
         # Step 2: Parallelize parsing using multiprocessing
         with Pool() as pool:
             results = pool.starmap(self._dct_parser, [(root_dct, key) for key in root_dct.keys()])
@@ -344,9 +344,11 @@ class RW(ABC):
                 
                 labels, values = self._get_property_weights(write_option, paths)
                 weights_v = weight_objects_dct_keys[weight_key]
-                
+               
                 # Determine weights based on type of weights_v
-                if isinstance(weights_v, dict):
+                if not values: # Default can be none
+                    continue
+                elif isinstance(weights_v, dict):
                     try:
                         weights = list(WeightedSampler(values, weights_v).sample())
                     except TypeError:
