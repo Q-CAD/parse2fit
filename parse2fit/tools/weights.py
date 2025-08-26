@@ -67,7 +67,6 @@ class WeightedSampler:
             return float(np.round(scale * max_val, 3))
 
         normal_values = np.abs(np.random.normal(0, sigma, size=len(self.values)))
-        print(normal_values)
         return [float(val) for val in np.round(self.set_max_min(min_val, max_val, scale * normal_values), 3)]
 
     def magnitude_weighting(self):
